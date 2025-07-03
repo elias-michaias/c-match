@@ -6,7 +6,9 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 
 - **Type-agnostic matching** for up to 10 arguments
 - **Zero runtime overhead** - compiles to optimal assembly identical to hand-written C
-- **Rich pattern support**: literals, wildcards, inequalities, ranges
+- **Rich pattern support**: literals, wildcards, inequalities, ranges, tagged unions
+- **Enum and tagged union destructuring** with automatic value extraction
+- **Comprehensive Result types** - Full `Result<T, E>` system with `CreateResult(TYPE)` macro, `ok_TYPE()`, `err_TYPE()`, helper functions, and seamless pattern matching
 - **Two forms**: Statement form `match() { when() ... }` and expression form `match_expr() in( is() ? ... : ... )`
 - **Do blocks** for complex operations in expression form `is () ? do(...) : do(...)`
 - **Automatic type conversion** using `_Generic`
@@ -53,6 +55,24 @@ int result = match_expr(score, attempts) in(
     : is(between(1, 60), __) ? "F"
     : "F-"
 );
+
+// Result types - powerful error handling
+Result_int divide(int a, int b) {
+    if (b == 0) {
+        return err_int("Division by zero");
+    }
+    return ok_int(a / b);
+}
+
+Result_int result = divide(10, 2);
+match(&result) {
+    when(variant(Ok)) {
+        printf("Success: %d\n", it(int));
+    }
+    when(variant(Err)) {
+        printf("Error: %s\n", it(char*));
+    }
+}
 
 // With do blocks for complex operations
 int complex = match_expr(value) in(
@@ -141,7 +161,38 @@ int main() {
 }
 ```
 
-### Step 5: Compilation
+### Step 5: Result Types for Error Handling
+```c
+// Function that can fail
+Result_int safe_divide(int a, int b) {
+    if (b == 0) {
+        return err_int("Division by zero");
+    }
+    return ok_int(a / b);
+}
+
+int main() {
+    Result_int result = safe_divide(10, 2);
+    
+    match(&result) {
+        when(variant(Ok)) {
+            printf("Result: %d\n", it(int));
+        }
+        when(variant(Err)) {
+            printf("Error: %s\n", it(char*));
+        }
+    }
+    
+    // Helper functions
+    if (is_ok(&result)) {
+        printf("Success! Value: %d\n", unwrap_or(&result, 0));
+    }
+    
+    return 0;
+}
+```
+
+### Step 6: Compilation
 ```bash
 # Basic compilation
 gcc -std=c11 -Wall -O2 your_program.c -o your_program
@@ -173,7 +224,7 @@ sudo cp match.h /usr/local/include/
 gcc -I/path/to/match/directory your_program.c
 ```
 
-## Building Examples and Tests
+## Building and Testing
 
 ```bash
 # Build everything
@@ -181,9 +232,6 @@ make all
 
 # Run tests
 make test
-
-# Run examples
-make examples
 
 # Run comprehensive demo
 make demo
@@ -208,6 +256,559 @@ make asm
 | `ne(x)` | Not equal | `when(ne(10))` | value != 10 |
 | `range(low, high)` | Exclusive range | `when(range(10, 20))` | 10 < value < 20 |
 | `between(low, high)` | Inclusive range | `when(between(10, 20))` | 10 <= value <= 20 |
+| `variant(tag)` | Tagged union match | `when(variant(TAG_INT))` | Union tag match |
+
+## Result Types
+
+The library includes a comprehensive Result type system similar to Rust's `Result<T, E>`, providing ergonomic error handling with zero runtime overhead.
+
+### Basic Result Usage
+
+```c
+#include "match.h"
+
+// Result_int is automatically available
+Result_int divide(int a, int b) {
+    if (b == 0) {
+        return err_int("Division by zero");
+    }
+    return ok_int(a / b);
+}
+
+int main() {
+    Result_int result = divide(10, 2);
+    
+    // Pattern matching with Results
+    match(&result) {
+        when(variant(Ok)) {
+            printf("Success: %d\n", it(int));
+        }
+        when(variant(Err)) {
+            printf("Error: %s\n", it(char*));
+        }
+    }
+    
+    // Helper functions
+    if (is_ok(&result)) {
+        printf("Result is OK: %d\n", unwrap_or(&result, -1));
+    }
+    
+    return 0;
+}
+```
+
+### Creating Custom Result Types
+
+Generate Result types for any type using the `CreateResult` macro:
+
+```c
+// Define your types
+typedef struct {
+    int x, y;
+} Point;
+
+typedef struct {
+    char name[32];
+    int age;
+} Person;
+
+// Generate Result types
+CreateResult(Point)
+CreateResult(Person)
+CreateResult(float)
+CreateResult(char_ptr)
+
+// Now you can use Result_Point, Result_Person, etc.
+Result_Point create_point(int x, int y) {
+    if (x < 0 || y < 0) {
+        return err_Point("Coordinates must be non-negative");
+    }
+    Point p = {x, y};
+    return ok_Point(p);
+}
+
+Result_Person create_person(const char* name, int age) {
+    if (age < 0 || age > 150) {
+        return err_Person("Invalid age");
+    }
+    if (strlen(name) == 0) {
+        return err_Person("Name cannot be empty");
+    }
+    Person person = {0};
+    strncpy(person.name, name, sizeof(person.name) - 1);
+    person.age = age;
+    return ok_Person(person);
+}
+```
+
+### Available Result Macros
+
+| Macro | Description | Example |
+|-------|-------------|---------|
+| `CreateResult(TYPE)` | Generate Result_TYPE | `CreateResult(int)` |
+| `ok_TYPE(value)` | Create successful Result | `ok_int(42)` |
+| `err_TYPE(message)` | Create error Result | `err_int("Error")` |
+| `is_ok(result_ptr)` | Check if Result is Ok | `is_ok(&result)` |
+| `is_err(result_ptr)` | Check if Result is Err | `is_err(&result)` |
+| `unwrap_or(result_ptr, default)` | Get value or default | `unwrap_or(&result, 0)` |
+
+### Result Pattern Matching
+
+Results work seamlessly with the pattern matching system:
+
+```c
+// Statement form
+Result_int results[] = {
+    ok_int(42),
+    err_int("Test error"),
+    ok_int(0)
+};
+
+for (int i = 0; i < 3; i++) {
+    match(&results[i]) {
+        when(variant(Ok)) {
+            int value = it(int);
+            printf("Success: %d\n", value);
+        }
+        when(variant(Err)) {
+            char* error = it(char*);
+            printf("Error: %s\n", error);
+        }
+    }
+}
+
+// Expression form
+const char* classify_result(Result_int* result) {
+    return match_expr(result) in(
+        is(variant(Ok)) ? (it(int) > 0 ? "positive" : 
+                          it(int) < 0 ? "negative" : "zero") :
+        is(variant(Err)) ? "error" :
+        "unknown"
+    );
+}
+```
+
+### Error Handling Patterns
+
+```c
+// Chain operations with error propagation
+Result_int process_data(int input) {
+    Result_int step1 = validate_input(input);
+    if (is_err(&step1)) {
+        return step1;  // Propagate error
+    }
+    
+    Result_int step2 = transform_data(unwrap_or(&step1, 0));
+    if (is_err(&step2)) {
+        return step2;  // Propagate error
+    }
+    
+    return finalize_data(unwrap_or(&step2, 0));
+}
+
+// Pattern-based error handling
+void handle_file_operation(const char* filename) {
+    Result_char_ptr file_result = read_file(filename);
+    
+    match(&file_result) {
+        when(variant(Ok)) {
+            char* content = it(char*);
+            printf("File content: %s\n", content);
+            free(content);
+        }
+        when(variant(Err)) {
+            char* error = it(char*);
+            match(strstr(error, "permission")) {
+                when(ne(NULL)) {
+                    printf("Permission denied for %s\n", filename);
+                }
+                otherwise {
+                    printf("Failed to read %s: %s\n", filename, error);
+                }
+            }
+        }
+    }
+}
+```
+
+### Built-in Error Constants
+
+Common error messages are predefined:
+
+```c
+// Available error constants
+ERR_NULL_POINTER        // "Null pointer"
+ERR_INVALID_ARGUMENT    // "Invalid argument"
+ERR_OUT_OF_BOUNDS       // "Index out of bounds"
+ERR_ALLOCATION_FAILED   // "Memory allocation failed"
+ERR_INVALID_STATE       // "Invalid state"
+ERR_NOT_FOUND          // "Not found"
+ERR_PERMISSION_DENIED   // "Permission denied"
+ERR_TIMEOUT            // "Operation timed out"
+ERR_UNSUPPORTED        // "Unsupported operation"
+ERR_UNKNOWN            // "Unknown error"
+
+// Usage
+Result_char_ptr allocate_buffer(size_t size) {
+    if (size == 0) {
+        return err_char_ptr(ERR_INVALID_ARGUMENT);
+    }
+    
+    char* buffer = malloc(size);
+    if (!buffer) {
+        return err_char_ptr(ERR_ALLOCATION_FAILED);
+    }
+    
+    return ok_char_ptr(buffer);
+}
+```
+
+### Advanced Result Patterns
+
+```c
+// Complex error handling with nested matching
+Result_int calculate_score(int base, int multiplier, int bonus) {
+    return match_expr(base, multiplier) in(
+        is(le(0), __) ? err_int("Base score must be positive") :
+        is(__, le(0)) ? err_int("Multiplier must be positive") :
+        is(gt(1000), __) ? err_int("Base score too high") :
+        is(__, gt(10)) ? err_int("Multiplier too high") :
+        ok_int(base * multiplier + bonus)
+    );
+}
+
+// Result transformation
+Result_float to_percentage(Result_int* score, int max_score) {
+    return match_expr(score) in(
+        is(variant(Ok)) ? (it(int) > max_score ? 
+                          err_float("Score exceeds maximum") :
+                          ok_float((float)it(int) / max_score * 100.0f)) :
+        is(variant(Err)) ? err_float(it(char*)) :
+        err_float("Invalid result")
+    );
+}
+```
+
+### Result Type Performance
+
+Result types are implemented as tagged unions with zero runtime overhead:
+- No heap allocation
+- No function call overhead
+- Compiles to optimal assembly
+- Suitable for embedded systems and performance-critical code
+
+The Result system uses the same underlying tagged union mechanism as other pattern matching features, ensuring consistent performance characteristics.
+
+## Enums and Tagged Unions
+
+The pattern matching system provides excellent support for both enums and tagged unions (sum types), making it easy to handle variant data in C.
+
+### Enum Matching
+
+Enums work seamlessly with the pattern matching system:
+
+```c
+typedef enum {
+    STATE_IDLE,
+    STATE_RUNNING,
+    STATE_PAUSED,
+    STATE_STOPPED
+} State;
+
+State current_state = STATE_RUNNING;
+
+match(current_state) {
+    when(STATE_IDLE) {
+        printf("System is idle\n");
+    }
+    when(STATE_RUNNING) {
+        printf("System is running\n");
+    }
+    when(STATE_PAUSED) {
+        printf("System is paused\n");
+    }
+    when(STATE_STOPPED) {
+        printf("System is stopped\n");
+    }
+    otherwise {
+        printf("Unknown state\n");
+    }
+}
+```
+
+### Tagged Union Destructuring
+
+Tagged unions enable powerful pattern matching with automatic value extraction:
+
+```c
+// Define your tagged union
+typedef enum {
+    TAG_INT = 1,
+    TAG_FLOAT = 2,
+    TAG_STRING = 3,
+    TAG_BOOL = 4
+} ValueTag;
+
+typedef struct {
+    uint32_t tag;        // Tag must be first field
+    union {
+        int int_val;
+        float float_val;
+        char* string_val;
+        int bool_val;
+    };
+} TaggedValue;
+
+// Use variant() to match tags and it() to access values
+TaggedValue value = {TAG_INT, .int_val = 42};
+
+match(&value) {
+    when(variant(TAG_INT)) {
+        printf("Integer: %d\n", it(int));
+    }
+    when(variant(TAG_FLOAT)) {
+        printf("Float: %.2f\n", it(float));
+    }
+    when(variant(TAG_STRING)) {
+        printf("String: %s\n", it(char*));
+    }
+    when(variant(TAG_BOOL)) {
+        printf("Boolean: %s\n", it(int) ? "true" : "false");
+    }
+    otherwise {
+        printf("Unknown variant\n");
+    }
+}
+```
+
+### Real-World Example: Result Type
+
+Here's a practical example implementing a Result type similar to Rust:
+
+```c
+typedef enum {
+    Ok = 1,
+    Err = 2
+} ResultTag;
+
+typedef struct {
+    uint32_t tag;
+    union {
+        int value;
+        char* error_msg;
+    };
+} Result;
+
+// Helper functions
+Result ok(int value) {
+    return (Result){Ok, .value = value};
+}
+
+Result error(const char* msg) {
+    return (Result){Err, .error_msg = (char*)msg};
+}
+
+// Usage
+Result divide(int a, int b) {
+    if (b == 0) {
+        return error("Division by zero");
+    }
+    return ok(a / b);
+}
+
+void process_result(Result result) {
+    match(&result) {
+        when(variant(Ok)) {
+            printf("Success: %d\n", it(int));
+        }
+        when(variant(Err)) {
+            printf("Error: %s\n", it(char*));
+        }
+    }
+}
+
+int main() {
+    process_result(divide(10, 2));  // Success: 5
+    process_result(divide(10, 0));  // Error: Division by zero
+    return 0;
+}
+```
+
+### Complex Example: JSON Values
+
+```c
+typedef enum {
+    JSON_NULL = 1,
+    JSON_BOOL = 2,
+    JSON_NUMBER = 3,
+    JSON_STRING = 4,
+    JSON_ARRAY = 5,
+    JSON_OBJECT = 6
+} JsonTag;
+
+typedef struct {
+    uint32_t tag;
+    union {
+        int null_val;
+        int bool_val;
+        double number_val;
+        char* string_val;
+        void* array_val;
+        void* object_val;
+    };
+} JsonValue;
+
+const char* json_type_name(JsonValue* value) {
+    return match_expr(value) in(
+        is(variant(JSON_NULL)) ? "null" :
+        is(variant(JSON_BOOL)) ? "boolean" :
+        is(variant(JSON_NUMBER)) ? "number" :
+        is(variant(JSON_STRING)) ? "string" :
+        is(variant(JSON_ARRAY)) ? "array" :
+        is(variant(JSON_OBJECT)) ? "object" :
+        "unknown"
+    );
+}
+
+void print_json_value(JsonValue* value) {
+    match(value) {
+        when(variant(JSON_NULL)) {
+            printf("null");
+        }
+        when(variant(JSON_BOOL)) {
+            printf(it(int) ? "true" : "false");
+        }
+        when(variant(JSON_NUMBER)) {
+            printf("%.2f", it(double));
+        }
+        when(variant(JSON_STRING)) {
+            printf("\"%s\"", it(char*));
+        }
+        when(variant(JSON_ARRAY)) {
+            printf("[array]");
+        }
+        when(variant(JSON_OBJECT)) {
+            printf("{object}");
+        }
+        otherwise {
+            printf("invalid");
+        }
+    }
+}
+```
+
+### Expression Form with Tagged Unions
+
+Tagged unions work seamlessly in expression form:
+
+```c
+int get_priority(TaggedValue* value) {
+    return match_expr(value) in(
+        is(variant(TAG_INT)) ? (it(int) > 100 ? 1 : 2) :
+        is(variant(TAG_FLOAT)) ? (it(float) > 50.0 ? 1 : 2) :
+        is(variant(TAG_STRING)) ? (strlen(it(char*)) > 10 ? 1 : 2) :
+        is(variant(TAG_BOOL)) ? (it(int) ? 1 : 3) :
+        0
+    );
+}
+```
+
+### Nested Matching with Tagged Unions
+
+You can nest pattern matching for complex logic:
+
+```c
+match(&result) {
+    when(variant(Ok)) {
+        int value = it(int);
+        match(value) {
+            when(0) {
+                printf("Success with zero value\n");
+            }
+            when(gt(100)) {
+                printf("Success with large value: %d\n", value);
+            }
+            otherwise {
+                printf("Success with value: %d\n", value);
+            }
+        }
+    }
+    when(variant(Err)) {
+        char* msg = it(char*);
+        match(strlen(msg)) {
+            when(gt(50)) {
+                printf("Long error message: %.50s...\n", msg);
+            }
+            otherwise {
+                printf("Error: %s\n", msg);
+            }
+        }
+    }
+}
+```
+
+### Tagged Union Requirements
+
+For tagged unions to work properly:
+
+1. **Tag field must be first**: The tag must be the first field in your struct
+2. **Tag must be uint32_t**: Use `uint32_t` for the tag field
+3. **Pass by pointer**: Pass the struct pointer to `match()` using `&`
+4. **Use it() macro**: Access matched values with `it(type)`
+
+### Struct Layout Considerations
+
+The library handles struct padding automatically:
+
+```c
+// Normal struct (with padding) - works automatically
+typedef struct {
+    uint32_t tag;    // 4 bytes
+    // 4 bytes padding on 64-bit systems
+    union {
+        int int_val;     // offset 8
+        double double_val;
+        char* string_val;
+    };
+} TaggedValue;
+
+// Packed struct - define VARIANT_UNION_OFFSET as 4
+#define VARIANT_UNION_OFFSET 4
+#include "match.h"
+
+typedef struct __attribute__((packed)) {
+    uint32_t tag;    // 4 bytes
+    union {
+        int int_val;     // offset 4
+        float float_val;
+        char string_val[16];
+    };
+} PackedTaggedValue;
+```
+
+### Legacy Interface
+
+For backward compatibility, `variant_value()` is still supported:
+
+```c
+// New interface (preferred)
+when(variant(TAG_INT)) {
+    printf("Value: %d\n", it(int));
+}
+
+// Legacy interface (still works)
+when(variant(TAG_INT)) {
+    printf("Value: %d\n", variant_value(int));
+}
+```
+
+### Performance Notes
+
+Tagged union matching is zero-overhead:
+- Tag comparison compiles to a simple integer comparison
+- Value extraction is just pointer arithmetic
+- No function calls or dynamic dispatch
+- Identical performance to hand-written switch statements
 
 ## Complete Example
 
@@ -410,21 +1011,25 @@ result = match_expr(value1, value2, ...) in(
 - `ne(x)` - Not equal to x
 - `range(low, high)` - Exclusive range (low < value < high)
 - `between(low, high)` - Inclusive range (low <= value <= high)
+- `variant(tag)` - Tagged union pattern (match by tag)
+
+### Value Access Macros
+- `it(type)` - Access matched tagged union value
+- `variant_value(type)` - Legacy interface for tagged union values
 
 ### Utility Macros
 - `do(...)` - Multi-statement expression block
 - `in(...)` - Expression form terminator
 - `otherwise` - Default case for statement form
 
-## Examples
+## Examples and Testing
 
-See the `examples/` directory for comprehensive examples:
-- `comprehensive_example.c` - Full feature demonstration
+The `tests/` directory contains comprehensive examples and test cases:
+- `test_basic.c` - Core pattern matching features and tagged unions
+- `test_results.c` - Result type system demonstrations
 - Basic usage patterns
 - Performance comparisons
 - Real-world use cases
-
-## Testing
 
 Run the test suite:
 ```bash
@@ -435,6 +1040,7 @@ Tests cover:
 - All pattern types
 - Multi-argument matching
 - Expression and statement forms
+- Result type system
 - Edge cases and error conditions
 - Performance characteristics
 
@@ -476,10 +1082,9 @@ gcc -std=c11 -O2 your_code.c
 ```
 match/
 ├── match.h              # 🎯 SINGLE HEADER FILE - This is all you need!
-├── examples/
-│   └── comprehensive_example.c  # Full feature demonstration
 ├── tests/
-│   └── test_basic.c     # Test suite
+│   ├── test_basic.c     # Pattern matching tests and examples
+│   └── test_results.c   # Result type system tests and examples
 ├── build/               # Build artifacts (ignored by git)
 ├── Makefile            # Build system
 ├── README.md           # This documentation

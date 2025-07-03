@@ -3,28 +3,21 @@ CFLAGS = -Wall -Wextra -std=c11 -O2 -g
 INCLUDES = -I.
 
 # Directories
-EXAMPLES_DIR = examples
 TESTS_DIR = tests
 BUILD_DIR = build
 
 # Source files
-EXAMPLE_SOURCES = $(wildcard $(EXAMPLES_DIR)/*.c)
 TEST_SOURCES = $(wildcard $(TESTS_DIR)/*.c)
 
 # Target executables
-EXAMPLE_TARGETS = $(patsubst $(EXAMPLES_DIR)/%.c,$(BUILD_DIR)/%.exe,$(EXAMPLE_SOURCES))
 TEST_TARGETS = $(patsubst $(TESTS_DIR)/%.c,$(BUILD_DIR)/%.exe,$(TEST_SOURCES))
 
-# Default target
-all: $(BUILD_DIR) $(EXAMPLE_TARGETS) $(TEST_TARGETS)
+# Default target - build and run tests
+all: test
 
 # Create build directory
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
-
-# Build examples
-$(BUILD_DIR)/%.exe: $(EXAMPLES_DIR)/%.c match.h
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $<
 
 # Build tests
 $(BUILD_DIR)/%.exe: $(TESTS_DIR)/%.c match.h
@@ -40,19 +33,14 @@ test: $(BUILD_DIR) $(TEST_TARGETS)
 	done
 	@echo "All tests passed!"
 
-# Run examples
-examples: $(BUILD_DIR) $(EXAMPLE_TARGETS)
-	@echo "Running examples..."
-	@for example in $(EXAMPLE_TARGETS); do \
-		echo "Running $$example..."; \
-		./$$example; \
-		echo ""; \
-	done
-
-# Run comprehensive example
-demo: $(BUILD_DIR)/comprehensive_example.exe
+# Run comprehensive demo using test files
+demo: $(BUILD_DIR)/test_basic.exe $(BUILD_DIR)/test_results.exe
 	@echo "Running comprehensive demo..."
-	./$(BUILD_DIR)/comprehensive_example.exe
+	@echo "Basic pattern matching tests:"
+	./$(BUILD_DIR)/test_basic.exe
+	@echo ""
+	@echo "Result type tests:"
+	./$(BUILD_DIR)/test_results.exe
 
 # Clean build directory
 clean:
@@ -61,14 +49,14 @@ clean:
 # Performance test with optimization
 benchmark: $(BUILD_DIR) match.h
 	@echo "Building optimized benchmark..."
-	$(CC) -O3 -DNDEBUG $(INCLUDES) -o $(BUILD_DIR)/benchmark.exe $(EXAMPLES_DIR)/comprehensive_example.c
+	$(CC) -O3 -DNDEBUG $(INCLUDES) -o $(BUILD_DIR)/benchmark.exe $(TESTS_DIR)/test_basic.c
 	@echo "Running benchmark..."
 	time ./$(BUILD_DIR)/benchmark.exe
 
 # Assembly output for analysis
 asm: match.h
 	@echo "Generating assembly output..."
-	$(CC) -S -O2 $(INCLUDES) -o $(BUILD_DIR)/match_asm.s $(EXAMPLES_DIR)/comprehensive_example.c
+	$(CC) -S -O2 $(INCLUDES) -o $(BUILD_DIR)/match_asm.s $(TESTS_DIR)/test_basic.c
 	@echo "Assembly saved to $(BUILD_DIR)/match_asm.s"
 
 # Check for memory leaks (if valgrind is available)
@@ -95,9 +83,8 @@ uninstall:
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  all        - Build all examples and tests"
+	@echo "  all        - Build and run all tests"
 	@echo "  test       - Run all tests"
-	@echo "  examples   - Run all examples"
 	@echo "  demo       - Run comprehensive demo"
 	@echo "  benchmark  - Run performance benchmark"
 	@echo "  asm        - Generate assembly output"
@@ -107,4 +94,4 @@ help:
 	@echo "  clean      - Clean build directory"
 	@echo "  help       - Show this help message"
 
-.PHONY: all test examples demo benchmark asm memcheck install uninstall clean help
+.PHONY: all test demo benchmark asm memcheck install uninstall clean help

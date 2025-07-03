@@ -2,19 +2,45 @@
 #define MATCH_H
 
 /*
- * Fast Pattern Matching System for C
+ * Fast Pattern Matching System for C with Result Types
  * 
  * A zero-overhead pattern matching library that compiles to optimal assembly.
- * Supports literals, wildcards, inequalities, ranges, and complex patterns.
+ * Supports literals, wildcards, inequalities, ranges, tagged union destructuring,
+ * and generic Result types (inspired by Rust's Result<T, E>).
  * 
  * Features:
  * - Type-agnostic matching for up to 10 arguments
  * - Wildcards (__), literals (42), inequalities (gt, lt, range, etc.)
+ * - Tagged union destructuring with variant(tag) patterns
+ * - Generic Result types for error handling
  * - Statement form: match() { when() { ... } otherwise { ... } }
  * - Expression form: match_expr() in( is() ? ... : ... )
  * - Do blocks: is(pattern) ? do(code...) : default
  * 
  * Performance: Zero runtime overhead - compiles to identical assembly as hand-written code
+ * 
+ * Quick Start:
+ * 
+ *   #include "match.h"
+ * 
+ *   // Pattern matching
+ *   match(value) {
+ *       when(42) { printf("Found 42!\n"); }
+ *       when(gt(10)) { printf("Greater than 10\n"); }
+ *       otherwise { printf("No match\n"); }
+ *   }
+ * 
+ *   // Result types for error handling
+ *   CreateResult(int)
+ *   Result_int divide(int a, int b) {
+ *       return b == 0 ? err_int("Division by zero") : ok_int(a / b);
+ *   }
+ * 
+ *   Result_int result = divide(10, 2);
+ *   match(&result) {
+ *       when(variant(Ok)) { printf("Result: %d\n", it(int)); }
+ *       when(variant(Err)) { printf("Error: %s\n", it(char*)); }
+ *   }
  * 
  * Usage Examples:
  * 
@@ -32,6 +58,32 @@
  *       is(__, lt(50)) ? 200 : 0
  *   );
  * 
+ *   // Tagged union destructuring
+ *   typedef struct {
+ *       uint32_t tag;
+ *       union {
+ *           int int_val;
+ *           float float_val;
+ *           char* string_val;
+ *       };
+ *   } TaggedValue;
+ * 
+ *   TaggedValue val = {TAG_INT, .int_val = 42};
+ *   match(&val) {
+ *       when(variant(TAG_INT)) {
+ *           printf("Got integer: %d\n", it(int));
+ *       }
+ *       when(variant(TAG_FLOAT)) {
+ *           printf("Got float: %f\n", it(float));
+ *       }
+ *       when(variant(TAG_STRING)) {
+ *           printf("Got string: %s\n", it(char*));
+ *       }
+ *       otherwise {
+ *           printf("Unknown variant\n");
+ *       }
+ *   }
+ * 
  *   // With do blocks
  *   char grade = match_expr(score) in(
  *       is(ge(90)) ? do(
@@ -39,6 +91,190 @@
  *           'A'
  *       ) : 'F'
  *   );
+ * 
+ * Tagged Union Notes:
+ * - Unions must have tag as first field (uint32_t)
+ * - Default assumes 8-byte offset to union (for padding)
+ * - For packed structs, define VARIANT_UNION_OFFSET as 4 before including
+ * - Use it(type) to access matched union value
+ * - Legacy variant_value(type) is still supported
+ * 
+ * ============================================================================
+ * RESULT TYPES - Generic Error Handling
+ * ============================================================================
+ * 
+ * Generic Result Type Generator (inspired by Rust's Result<T, E>)
+ * 
+ * This provides macros to generate Result types for any data type,
+ * making error handling safe and explicit while integrating seamlessly
+ * with the pattern matching system.
+ * 
+ * Usage:
+ *   CreateResult(int)        -> Result_int type
+ *   CreateResult(MyStruct)   -> Result_MyStruct type
+ *   CreateResult(char*)      -> Result_char_ptr type (special handling for pointers)
+ * 
+ * Each generated Result type has:
+ *   - Ok and Err variants
+ *   - Helper functions: ok_TypeName() and err_TypeName()
+ *   - Compatible with the match system using variant(Ok) and variant(Err)
+ * 
+ * Result Pattern Matching Examples:
+ * 
+ *   // Create a custom Result type
+ *   typedef struct { int x, y; } Point;
+ *   CreateResult(Point)
+ * 
+ *   // Function that returns a Result
+ *   Result_Point create_point(int x, int y) {
+ *       if (x < 0 || y < 0) {
+ *           return err_Point("Coordinates must be non-negative");
+ *       }
+ *       Point p = {x, y};
+ *       return ok_Point(p);
+ *   }
+ * 
+ *   // Pattern match on the result
+ *   Result_Point result = create_point(10, 20);
+ *   match(&result) {
+ *       when(variant(Ok)) {
+ *           Point p = it(Point);
+ *           printf("Point: (%d, %d)\n", p.x, p.y);
+ *       }
+ *       when(variant(Err)) {
+ *           printf("Error: %s\n", it(char*));
+ *       }
+ *   }
+ * 
+ *   // Expression form with Results
+ *   int status = match_expr(&result) in(
+ *       is(variant(Ok)) ? 0 : -1
+ *   );
+ * 
+ *   // Utility functions
+ *   if (is_ok(&result)) {
+ *       Point p = result.value;
+ *       // use point...
+ *   }
+ * 
+ *   Point default_point = {0, 0};
+ *   Point p = unwrap_or(&result, default_point);
+ */
+
+#include <stdint.h>
+
+// ============================================================================
+// RESULT TYPES IMPLEMENTATION
+// ============================================================================
+
+// Common result tags
+typedef enum {
+    Ok = 1,
+    Err = 2
+} ResultTag;
+
+// ============================================================================
+// Macro to create Result types for any type
+// ============================================================================
+
+#define CreateResult(TYPE) \
+    typedef struct { \
+        uint32_t tag; \
+        union { \
+            TYPE value; \
+            char* error_msg; \
+        }; \
+    } Result_##TYPE; \
+    \
+    static inline Result_##TYPE ok_##TYPE(TYPE val) { \
+        return (Result_##TYPE){Ok, .value = val}; \
+    } \
+    \
+    static inline Result_##TYPE err_##TYPE(const char* msg) { \
+        return (Result_##TYPE){Err, .error_msg = (char*)msg}; \
+    }
+
+// ============================================================================
+// Special macro for pointer types (handles the * in the name)
+// ============================================================================
+
+#define CreateResultPtr(TYPE, SUFFIX) \
+    typedef struct { \
+        uint32_t tag; \
+        union { \
+            TYPE* value; \
+            char* error_msg; \
+        }; \
+    } Result_##SUFFIX; \
+    \
+    static inline Result_##SUFFIX ok_##SUFFIX(TYPE* val) { \
+        return (Result_##SUFFIX){Ok, .value = val}; \
+    } \
+    \
+    static inline Result_##SUFFIX err_##SUFFIX(const char* msg) { \
+        return (Result_##SUFFIX){Err, .error_msg = (char*)msg}; \
+    }
+
+// ============================================================================
+// Predefined common Result types
+// ============================================================================
+
+// Basic types
+CreateResult(int)
+CreateResult(float)
+CreateResult(double)
+CreateResult(long)
+CreateResult(size_t)
+
+// Pointer types with clean names
+CreateResultPtr(char, char_ptr)
+CreateResultPtr(void, void_ptr)
+
+// ============================================================================
+// Generic helper macros for working with any Result type
+// ============================================================================
+
+#define is_ok(result_ptr) ((result_ptr)->tag == Ok)
+#define is_err(result_ptr) ((result_ptr)->tag == Err)
+
+#define unwrap_or(result_ptr, default_val) \
+    (is_ok(result_ptr) ? (result_ptr)->value : (default_val))
+
+#define unwrap_or_else(result_ptr, func) \
+    (is_ok(result_ptr) ? (result_ptr)->value : func((result_ptr)->error_msg))
+
+// ============================================================================
+// Error handling utilities
+// ============================================================================
+
+// Common error messages
+#define ERR_NULL_POINTER "Null pointer"
+#define ERR_OUT_OF_BOUNDS "Index out of bounds"
+#define ERR_INVALID_INPUT "Invalid input"
+#define ERR_ALLOCATION_FAILED "Memory allocation failed"
+#define ERR_FILE_NOT_FOUND "File not found"
+#define ERR_PERMISSION_DENIED "Permission denied"
+#define ERR_NETWORK_ERROR "Network error"
+#define ERR_TIMEOUT "Operation timed out"
+
+// ============================================================================
+// Chaining operations (monadic-style)
+// ============================================================================
+
+#define RESULT_MAP(result_ptr, func, result_type) \
+    (is_ok(result_ptr) ? ok_##result_type(func((result_ptr)->value)) : \
+                         err_##result_type((result_ptr)->error_msg))
+
+#define RESULT_AND_THEN(result_ptr, func) \
+    (is_ok(result_ptr) ? func((result_ptr)->value) : *result_ptr)
+
+/*
+ * Tagged Union Notes:
+ * - Unions must have tag as first field (uint32_t)
+ * - Default assumes 8-byte offset to union (for padding)
+ * - For packed structs, define VARIANT_UNION_OFFSET as 4 before including
+ * - Use it(type) to access matched union value
+ * - Legacy variant_value(type) is still supported
  */
 
 #include <stdint.h>
@@ -70,6 +306,9 @@
 #define range(low, high) ((void*)(0x6000000000000000ULL | (((uint64_t)((uint16_t)(low)) << 32) | ((uint16_t)(high)))))
 #define between(low, high) ((void*)(0x7000000000000000ULL | (((uint64_t)((uint16_t)(low)) << 32) | ((uint16_t)(high)))))
 
+// Union variant patterns - encode tag only, always extract value
+#define variant(tag) ((void*)(0x8000000000000000ULL | (((uint64_t)((uint32_t)(tag)) << 16) | 1)))
+
 // ============================================================================
 // Pattern Decoding Utilities
 // ============================================================================
@@ -78,10 +317,15 @@
 #define GET_PATTERN_VALUE(p) ((intptr_t)((uintptr_t)(p) & 0x0FFFFFFFFFFFFFFFULL))
 #define GET_RANGE_LOW(p) ((int16_t)(((uintptr_t)(p) >> 32) & 0xFFFF))
 #define GET_RANGE_HIGH(p) ((int16_t)((uintptr_t)(p) & 0xFFFF))
+#define GET_VARIANT_TAG(p) ((uint32_t)(((uintptr_t)(p) >> 16) & 0xFFFFFFFF))
+#define GET_VARIANT_EXTRACT(p) (((uintptr_t)(p)) & 0x1)
 
 // ============================================================================
 // Pattern Evaluation Engine
 // ============================================================================
+
+// Thread-local storage for extracted variant values
+static __thread void* __variant_extracted_value = NULL;
 
 static inline int evaluate_pattern(intptr_t actual, void* pattern) {
     if (IS_WILDCARD(pattern)) return 1;
@@ -105,9 +349,44 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
             intptr_t high = GET_RANGE_HIGH(pattern);
             return actual >= low && actual <= high;
         }
+        case 8: { // variant destructuring
+            // For variant patterns, 'actual' should point to a tagged union struct
+            // We expect the struct to have .tag as the first field
+            uint32_t expected_tag = GET_VARIANT_TAG(pattern);
+            
+            // Extract tag from the union (assuming first field is the tag)
+            uint32_t union_tag = *((uint32_t*)actual);
+            
+            if (union_tag == expected_tag) {
+                // Find the union field - it typically starts after tag with possible padding
+                // Use 8 bytes as default offset for most modern systems (accounts for padding)
+                // Users can override by defining VARIANT_UNION_OFFSET
+                #ifndef VARIANT_UNION_OFFSET
+                #define VARIANT_UNION_OFFSET 8
+                #endif
+                
+                char* struct_ptr = (char*)actual;
+                __variant_extracted_value = (void*)(struct_ptr + VARIANT_UNION_OFFSET);
+                return 1;
+            }
+            return 0;
+        }
     }
     return 0;
 }
+
+// ============================================================================
+// Union Destructuring Helper Macros
+// ============================================================================
+
+// Access the extracted variant value (with type casting) - simplified interface
+#define it(type) (*((type*)__variant_extracted_value))
+
+// Access the extracted variant value (with type casting) - legacy interface
+#define variant_value(type) (*((type*)__variant_extracted_value))
+
+// Check if a value was extracted (for debugging)
+#define has_variant_value() (__variant_extracted_value != NULL)
 
 // ============================================================================
 // Automatic Pattern Conversion
