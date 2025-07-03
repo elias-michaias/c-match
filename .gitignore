@@ -1,0 +1,92 @@
+# Build artifacts
+build/
+obj/
+*.o
+*.obj
+*.exe
+*.out
+*.app
+
+# Compiled binaries
+*.bin
+*.elf
+*.hex
+
+# Assembly output
+*.s
+*.asm
+
+# Debug files
+*.dSYM/
+*.pdb
+*.ilk
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+#*#
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.vim
+.clangd/
+compile_commands.json
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Log files
+*.log
+
+# Test outputs
+test_results/
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# Documentation build
+docs/build/
+docs/_build/
+
+# Performance profiling
+*.prof
+*.gprof
+gmon.out
+
+# Valgrind outputs
+valgrind*.log
+*.memcheck
+
+# CMake (if used)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile.cmake
+
+# Package manager files
+.conan/
+vcpkg_installed/
+
+# Editor temp files
+*.kate-swp
+.#*
+
+# Generated files
+GETTING_STARTED.md
