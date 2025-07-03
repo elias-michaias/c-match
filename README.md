@@ -7,8 +7,8 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 - **Type-agnostic matching** for up to 10 arguments
 - **Zero runtime overhead** - compiles to optimal assembly identical to hand-written C
 - **Rich pattern support**: literals, wildcards, inequalities, ranges, tagged unions
-- **Enum and tagged union destructuring** with automatic value extraction
-- **Comprehensive Result types** - Full `Result<T, E>` system with `CreateResult(TYPE)` macro, `ok_TYPE()`, `err_TYPE()`, helper functions, and seamless pattern matching
+- **Enum and tagged union destructuring** with automatic value extraction via `it(TYPE)`
+- **Result types** - Full `Result<T, E>` system with `CreateResult(TYPE)` macro, `ok_TYPE()`, `err_TYPE()`, helper functions, and seamless pattern matching
 - **Two forms**: Statement form `match() { when() ... }` and expression form `match_expr() in( is() ? ... : ... )`
 - **Do blocks** for complex operations in expression form `is () ? do(...) : do(...)`
 - **Automatic type conversion** using `_Generic`
@@ -25,6 +25,24 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 
 ```c
 #include "match.h"
+
+// Result types - powerful error handling
+Result_int divide(int a, int b) {
+    if (b == 0) {
+        return err_int("Division by zero");
+    }
+    return ok_int(a / b);
+}
+
+Result_int result = divide(10, 2);
+match(&result) {
+    when(variant(Ok)) {
+        printf("Success: %d\n", it(int));
+    }
+    when(variant(Err)) {
+        printf("Error: %s\n", it(char*));
+    }
+}
 
 // Statement form
 match(greeting, name, age) {
@@ -46,7 +64,7 @@ match(greeting, name, age) {
 }
 
 // Expression form
-int result = match_expr(score, attempts) in(
+int output = match_expr(score, attempts) in(
     is(100, 1) ? "A+"  
     : is(ge(90), le(3)) ? "A"
     : is(ge(80), le(5)) ? "B"
@@ -55,24 +73,6 @@ int result = match_expr(score, attempts) in(
     : is(between(1, 60), __) ? "F"
     : "F-"
 );
-
-// Result types - powerful error handling
-Result_int divide(int a, int b) {
-    if (b == 0) {
-        return err_int("Division by zero");
-    }
-    return ok_int(a / b);
-}
-
-Result_int result = divide(10, 2);
-match(&result) {
-    when(variant(Ok)) {
-        printf("Success: %d\n", it(int));
-    }
-    when(variant(Err)) {
-        printf("Error: %s\n", it(char*));
-    }
-}
 
 // With do blocks for complex operations
 int complex = match_expr(value) in(

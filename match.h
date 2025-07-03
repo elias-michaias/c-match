@@ -42,7 +42,7 @@
  *       when(variant(Err)) { printf("Error: %s\n", it(char*)); }
  *   }
  * 
- * Usage Examples:
+ *   // Usage Examples:
  * 
  *   // Statement form
  *   match(value) {
@@ -162,6 +162,36 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>
+
+// ============================================================================
+// TYPE EXPRESSION MACROS
+// ============================================================================
+
+/*
+ * Type expression macros that expand to the correct typedef names.
+ * 
+ * Usage:
+ *   Option(int) func();           -> Option_int func();
+ *   Result(char*) parse_string(); -> Result_char_ptr parse_string();
+ *   Option(MyStruct) data;        -> Option_MyStruct data;
+ * 
+ * These macros handle pointer types automatically by converting * to _ptr.
+ */
+
+// Helper macros for concatenation
+#define _CONCAT(a, b) a##b
+#define CONCAT(a, b) _CONCAT(a, b)
+
+// Type expression macros that simply concatenate to form the correct type names
+#define Option(TYPE) CONCAT(Option_, TYPE)
+#define Result(TYPE) CONCAT(Result_, TYPE)
+
+// Special handling for common pointer types using overrides
+#define Option_char_star Option_char_ptr
+#define Result_char_star Result_char_ptr
+#define Option_void_star Option_void_ptr
+#define Result_void_star Result_void_ptr
 
 // ============================================================================
 // RESULT TYPES IMPLEMENTATION
@@ -180,6 +210,7 @@ typedef enum {
 #define CreateResult(TYPE) \
     typedef struct { \
         uint32_t tag; \
+        uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
             TYPE value; \
             char* error_msg; \
@@ -187,11 +218,11 @@ typedef enum {
     } Result_##TYPE; \
     \
     static inline Result_##TYPE ok_##TYPE(TYPE val) { \
-        return (Result_##TYPE){Ok, .value = val}; \
+        return (Result_##TYPE){Ok, 0, .value = val}; \
     } \
     \
     static inline Result_##TYPE err_##TYPE(const char* msg) { \
-        return (Result_##TYPE){Err, .error_msg = (char*)msg}; \
+        return (Result_##TYPE){Err, 0, .error_msg = (char*)msg}; \
     }
 
 // ============================================================================
@@ -201,6 +232,7 @@ typedef enum {
 #define CreateResultPtr(TYPE, SUFFIX) \
     typedef struct { \
         uint32_t tag; \
+        uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
             TYPE* value; \
             char* error_msg; \
@@ -208,11 +240,11 @@ typedef enum {
     } Result_##SUFFIX; \
     \
     static inline Result_##SUFFIX ok_##SUFFIX(TYPE* val) { \
-        return (Result_##SUFFIX){Ok, .value = val}; \
+        return (Result_##SUFFIX){Ok, 0, .value = val}; \
     } \
     \
     static inline Result_##SUFFIX err_##SUFFIX(const char* msg) { \
-        return (Result_##SUFFIX){Err, .error_msg = (char*)msg}; \
+        return (Result_##SUFFIX){Err, 0, .error_msg = (char*)msg}; \
     }
 
 // ============================================================================
@@ -277,7 +309,11 @@ CreateResultPtr(void, void_ptr)
  * - Legacy variant_value(type) is still supported
  */
 
-#include <stdint.h>
+// The default union offset (8 bytes) works correctly for our tagged union types
+// due to struct alignment - uint32_t tag + 4 bytes padding + union
+// #ifndef VARIANT_UNION_OFFSET
+// #define VARIANT_UNION_OFFSET 4
+// #endif
 
 // ============================================================================
 // Core Infrastructure
@@ -325,7 +361,7 @@ CreateResultPtr(void, void_ptr)
 // ============================================================================
 
 // Thread-local storage for extracted variant values
-static __thread void* __variant_extracted_value = NULL;
+static __thread void* __variant_extracted_value = ((void*)0);
 
 static inline int evaluate_pattern(intptr_t actual, void* pattern) {
     if (IS_WILDCARD(pattern)) return 1;
@@ -375,6 +411,29 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
     return 0;
 }
 
+static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void* pattern) {
+    // First check if this could be a tagged union auto-variant case
+    // Only applies to the first argument when it's a pointer to a struct
+    if (subject != ((void*)0) && (uintptr_t)subject > 0x1000) {  // Basic pointer sanity check
+        // Check if pattern is a small integer (likely enum value) and not a special pattern
+        uintptr_t pattern_val = (uintptr_t)pattern;
+        if (pattern_val <= 0xFFFF && (pattern_val >> 60) == 0) {  // Not a special pattern
+            // Check if subject looks like a tagged union
+            uint32_t potential_tag = *(uint32_t*)subject;
+            if (potential_tag > 0 && potential_tag <= 0xFFFF) {  // Reasonable tag range
+                if (potential_tag == (uint32_t)pattern_val) {
+                    // Auto-convert to variant match!
+                    void* variant_pattern = (void*)(0x8000000000000000ULL | (((uint64_t)potential_tag << 16) | 1));
+                    return evaluate_pattern((intptr_t)subject, variant_pattern);
+                }
+            }
+        }
+    }
+    
+    // Fall back to regular pattern matching
+    return evaluate_pattern(actual, pattern);
+}
+
 // ============================================================================
 // Union Destructuring Helper Macros
 // ============================================================================
@@ -386,7 +445,7 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
 #define variant_value(type) (*((type*)__variant_extracted_value))
 
 // Check if a value was extracted (for debugging)
-#define has_variant_value() (__variant_extracted_value != NULL)
+#define has_variant_value() (__variant_extracted_value != ((void*)0))
 
 // ============================================================================
 // Automatic Pattern Conversion
@@ -417,88 +476,143 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
 // Match macros for 1-10 arguments
 #define MATCH_1(a1) \
     for (int __matched = 0; !__matched;) \
-        for (void *__v1 = (void*)(intptr_t)(a1); !__matched;)
+        for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
+            for (void *__v1_orig = (void*)(a1); !__matched;)
 
 #define MATCH_2(a1, a2) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;)
 
 #define MATCH_3(a1, a2, a3) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;)
 
 #define MATCH_4(a1, a2, a3, a4) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;)
 
 #define MATCH_5(a1, a2, a3, a4, a5) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
-                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;) \
+                                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
+                                            for (void *__v5_orig = (void*)(a5); !__matched;)
 
 #define MATCH_6(a1, a2, a3, a4, a5, a6) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
-                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
-                            for (void *__v6 = (void*)(intptr_t)(a6); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;) \
+                                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
+                                            for (void *__v5_orig = (void*)(a5); !__matched;) \
+                                                for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
+                                                    for (void *__v6_orig = (void*)(a6); !__matched;)
 
 #define MATCH_7(a1, a2, a3, a4, a5, a6, a7) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
-                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
-                            for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
-                                for (void *__v7 = (void*)(intptr_t)(a7); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;) \
+                                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
+                                            for (void *__v5_orig = (void*)(a5); !__matched;) \
+                                                for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
+                                                    for (void *__v6_orig = (void*)(a6); !__matched;) \
+                                                        for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
+                                                            for (void *__v7_orig = (void*)(a7); !__matched;)
 
 #define MATCH_8(a1, a2, a3, a4, a5, a6, a7, a8) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
-                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
-                            for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
-                                for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
-                                    for (void *__v8 = (void*)(intptr_t)(a8); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;) \
+                                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
+                                            for (void *__v5_orig = (void*)(a5); !__matched;) \
+                                                for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
+                                                    for (void *__v6_orig = (void*)(a6); !__matched;) \
+                                                        for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
+                                                            for (void *__v7_orig = (void*)(a7); !__matched;) \
+                                                                for (void *__v8 = (void*)(intptr_t)(a8); !__matched;) \
+                                                                    for (void *__v8_orig = (void*)(a8); !__matched;)
 
 #define MATCH_9(a1, a2, a3, a4, a5, a6, a7, a8, a9) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
-                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
-                            for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
-                                for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
-                                    for (void *__v8 = (void*)(intptr_t)(a8); !__matched;) \
-                                        for (void *__v9 = (void*)(intptr_t)(a9); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;) \
+                                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
+                                            for (void *__v5_orig = (void*)(a5); !__matched;) \
+                                                for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
+                                                    for (void *__v6_orig = (void*)(a6); !__matched;) \
+                                                        for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
+                                                            for (void *__v7_orig = (void*)(a7); !__matched;) \
+                                                                for (void *__v8 = (void*)(intptr_t)(a8); !__matched;) \
+                                                                    for (void *__v8_orig = (void*)(a8); !__matched;) \
+                                                                        for (void *__v9 = (void*)(intptr_t)(a9); !__matched;) \
+                                                                            for (void *__v9_orig = (void*)(a9); !__matched;)
 
 #define MATCH_10(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) \
     for (int __matched = 0; !__matched;) \
         for (void *__v1 = (void*)(intptr_t)(a1); !__matched;) \
-            for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
-                for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
-                    for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
-                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
-                            for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
-                                for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
-                                    for (void *__v8 = (void*)(intptr_t)(a8); !__matched;) \
-                                        for (void *__v9 = (void*)(intptr_t)(a9); !__matched;) \
-                                            for (void *__v10 = (void*)(intptr_t)(a10); !__matched;)
+            for (void *__v1_orig = (void*)(a1); !__matched;) \
+                for (void *__v2 = (void*)(intptr_t)(a2); !__matched;) \
+                    for (void *__v2_orig = (void*)(a2); !__matched;) \
+                        for (void *__v3 = (void*)(intptr_t)(a3); !__matched;) \
+                            for (void *__v3_orig = (void*)(a3); !__matched;) \
+                                for (void *__v4 = (void*)(intptr_t)(a4); !__matched;) \
+                                    for (void *__v4_orig = (void*)(a4); !__matched;) \
+                                        for (void *__v5 = (void*)(intptr_t)(a5); !__matched;) \
+                                            for (void *__v5_orig = (void*)(a5); !__matched;) \
+                                                for (void *__v6 = (void*)(intptr_t)(a6); !__matched;) \
+                                                    for (void *__v6_orig = (void*)(a6); !__matched;) \
+                                                        for (void *__v7 = (void*)(intptr_t)(a7); !__matched;) \
+                                                            for (void *__v7_orig = (void*)(a7); !__matched;) \
+                                                                for (void *__v8 = (void*)(intptr_t)(a8); !__matched;) \
+                                                                    for (void *__v8_orig = (void*)(a8); !__matched;) \
+                                                                        for (void *__v9 = (void*)(intptr_t)(a9); !__matched;) \
+                                                                            for (void *__v9_orig = (void*)(a9); !__matched;) \
+                                                                                for (void *__v10 = (void*)(intptr_t)(a10); !__matched;) \
+                                                                                    for (void *__v10_orig = (void*)(a10); !__matched;)
 
 // When clause macros
 #define when(...) WHEN_DISPATCH(COUNT_ARGS(__VA_ARGS__), __VA_ARGS__)
@@ -506,74 +620,74 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
 #define WHEN_DISPATCH_(N, ...) WHEN_##N(__VA_ARGS__)
 
 #define WHEN_1(x1) \
-    if (!__matched && evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && (__matched = 1))
+    if (!__matched && evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && (__matched = 1))
 
 #define WHEN_2(x1, x2) \
-    if (!__matched && evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && (__matched = 1))
+    if (!__matched && evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && (__matched = 1))
 
 #define WHEN_3(x1, x2, x3) \
-    if (!__matched && evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && (__matched = 1))
+    if (!__matched && evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && (__matched = 1))
 
 #define WHEN_4(x1, x2, x3, x4) \
-    if (!__matched && evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && (__matched = 1))
+    if (!__matched && evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && (__matched = 1))
 
 #define WHEN_5(x1, x2, x3, x4, x5) \
-    if (!__matched && evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && (__matched = 1))
+    if (!__matched && evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && (__matched = 1))
 
 #define WHEN_6(x1, x2, x3, x4, x5, x6) \
     if (!__matched && \
-        evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-        evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-        evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-        evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-        evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-        evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && (__matched = 1))
+        evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+        evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+        evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+        evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+        evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+        evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && (__matched = 1))
 
 #define WHEN_7(x1, x2, x3, x4, x5, x6, x7) \
     if (!__matched && \
-        evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-        evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-        evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-        evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-        evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-        evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-        evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && (__matched = 1))
+        evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+        evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+        evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+        evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+        evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+        evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+        evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && (__matched = 1))
 
 #define WHEN_8(x1, x2, x3, x4, x5, x6, x7, x8) \
     if (!__matched && \
-        evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-        evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-        evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-        evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-        evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-        evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-        evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && \
-        evaluate_pattern((intptr_t)__v8, _auto_pattern(x8)) && (__matched = 1))
+        evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+        evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+        evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+        evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+        evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+        evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+        evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && \
+        evaluate_pattern_enhanced(__v8_orig, (intptr_t)__v8, _auto_pattern(x8)) && (__matched = 1))
 
 #define WHEN_9(x1, x2, x3, x4, x5, x6, x7, x8, x9) \
     if (!__matched && \
-        evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-        evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-        evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-        evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-        evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-        evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-        evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && \
-        evaluate_pattern((intptr_t)__v8, _auto_pattern(x8)) && \
-        evaluate_pattern((intptr_t)__v9, _auto_pattern(x9)) && (__matched = 1))
+        evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+        evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+        evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+        evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+        evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+        evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+        evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && \
+        evaluate_pattern_enhanced(__v8_orig, (intptr_t)__v8, _auto_pattern(x8)) && \
+        evaluate_pattern_enhanced(__v9_orig, (intptr_t)__v9, _auto_pattern(x9)) && (__matched = 1))
 
 #define WHEN_10(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) \
     if (!__matched && \
-        evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-        evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-        evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-        evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-        evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-        evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-        evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && \
-        evaluate_pattern((intptr_t)__v8, _auto_pattern(x8)) && \
-        evaluate_pattern((intptr_t)__v9, _auto_pattern(x9)) && \
-        evaluate_pattern((intptr_t)__v10, _auto_pattern(x10)) && (__matched = 1))
+        evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+        evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+        evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+        evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+        evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+        evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+        evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && \
+        evaluate_pattern_enhanced(__v8_orig, (intptr_t)__v8, _auto_pattern(x8)) && \
+        evaluate_pattern_enhanced(__v9_orig, (intptr_t)__v9, _auto_pattern(x9)) && \
+        evaluate_pattern_enhanced(__v10_orig, (intptr_t)__v10, _auto_pattern(x10)) && (__matched = 1))
 
 #define otherwise else if (!__matched && (__matched = 1))
 
@@ -586,44 +700,44 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
 #define MATCH_EXPR_DISPATCH_(N, ...) MATCH_EXPR_##N(__VA_ARGS__)
 
 #define MATCH_EXPR_1(a1) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); __auto_type __result =
+    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); __auto_type __result =
 
 #define MATCH_EXPR_2(a1, a2) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v2 = (void*)(intptr_t)(a2); __auto_type __result =
+    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v2_orig = (void*)(a2); __auto_type __result =
 
 #define MATCH_EXPR_3(a1, a2, a3) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v3 = (void*)(intptr_t)(a3); __auto_type __result =
+    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v2_orig = (void*)(a2); void *__v3 = (void*)(intptr_t)(a3); void *__v3_orig = (void*)(a3); __auto_type __result =
 
 #define MATCH_EXPR_4(a1, a2, a3, a4) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v3 = (void*)(intptr_t)(a3); void *__v4 = (void*)(intptr_t)(a4); __auto_type __result =
+    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v2_orig = (void*)(a2); void *__v3 = (void*)(intptr_t)(a3); void *__v3_orig = (void*)(a3); void *__v4 = (void*)(intptr_t)(a4); void *__v4_orig = (void*)(a4); __auto_type __result =
 
 #define MATCH_EXPR_5(a1, a2, a3, a4, a5) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v3 = (void*)(intptr_t)(a3); void *__v4 = (void*)(intptr_t)(a4); void *__v5 = (void*)(intptr_t)(a5); __auto_type __result =
+    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v2_orig = (void*)(a2); void *__v3 = (void*)(intptr_t)(a3); void *__v3_orig = (void*)(a3); void *__v4 = (void*)(intptr_t)(a4); void *__v4_orig = (void*)(a4); void *__v5 = (void*)(intptr_t)(a5); void *__v5_orig = (void*)(a5); __auto_type __result =
 
 #define MATCH_EXPR_6(a1, a2, a3, a4, a5, a6) \
-    ({ void *__v1=(void*)(intptr_t)(a1), *__v2=(void*)(intptr_t)(a2), *__v3=(void*)(intptr_t)(a3), \
-        *__v4=(void*)(intptr_t)(a4), *__v5=(void*)(intptr_t)(a5), *__v6=(void*)(intptr_t)(a6); __auto_type __result =
+    ({ void *__v1=(void*)(intptr_t)(a1), *__v1_orig=(void*)(a1), *__v2=(void*)(intptr_t)(a2), *__v2_orig=(void*)(a2), *__v3=(void*)(intptr_t)(a3), *__v3_orig=(void*)(a3), \
+        *__v4=(void*)(intptr_t)(a4), *__v4_orig=(void*)(a4), *__v5=(void*)(intptr_t)(a5), *__v5_orig=(void*)(a5), *__v6=(void*)(intptr_t)(a6), *__v6_orig=(void*)(a6); __auto_type __result =
 
 #define MATCH_EXPR_7(a1, a2, a3, a4, a5, a6, a7) \
-    ({ void *__v1=(void*)(intptr_t)(a1), *__v2=(void*)(intptr_t)(a2), *__v3=(void*)(intptr_t)(a3), \
-        *__v4=(void*)(intptr_t)(a4), *__v5=(void*)(intptr_t)(a5), *__v6=(void*)(intptr_t)(a6), \
-        *__v7=(void*)(intptr_t)(a7); __auto_type __result =
+    ({ void *__v1=(void*)(intptr_t)(a1), *__v1_orig=(void*)(a1), *__v2=(void*)(intptr_t)(a2), *__v2_orig=(void*)(a2), *__v3=(void*)(intptr_t)(a3), *__v3_orig=(void*)(a3), \
+        *__v4=(void*)(intptr_t)(a4), *__v4_orig=(void*)(a4), *__v5=(void*)(intptr_t)(a5), *__v5_orig=(void*)(a5), *__v6=(void*)(intptr_t)(a6), *__v6_orig=(void*)(a6), \
+        *__v7=(void*)(intptr_t)(a7), *__v7_orig=(void*)(a7); __auto_type __result =
 
 #define MATCH_EXPR_8(a1, a2, a3, a4, a5, a6, a7, a8) \
-    ({ void *__v1=(void*)(intptr_t)(a1), *__v2=(void*)(intptr_t)(a2), *__v3=(void*)(intptr_t)(a3), \
-        *__v4=(void*)(intptr_t)(a4), *__v5=(void*)(intptr_t)(a5), *__v6=(void*)(intptr_t)(a6), \
-        *__v7=(void*)(intptr_t)(a7), *__v8=(void*)(intptr_t)(a8); __auto_type __result =
+    ({ void *__v1=(void*)(intptr_t)(a1), *__v1_orig=(void*)(a1), *__v2=(void*)(intptr_t)(a2), *__v2_orig=(void*)(a2), *__v3=(void*)(intptr_t)(a3), *__v3_orig=(void*)(a3), \
+        *__v4=(void*)(intptr_t)(a4), *__v4_orig=(void*)(a4), *__v5=(void*)(intptr_t)(a5), *__v5_orig=(void*)(a5), *__v6=(void*)(intptr_t)(a6), *__v6_orig=(void*)(a6), \
+        *__v7=(void*)(intptr_t)(a7), *__v7_orig=(void*)(a7), *__v8=(void*)(intptr_t)(a8), *__v8_orig=(void*)(a8); __auto_type __result =
 
 #define MATCH_EXPR_9(a1, a2, a3, a4, a5, a6, a7, a8, a9) \
-    ({ void *__v1=(void*)(intptr_t)(a1), *__v2=(void*)(intptr_t)(a2), *__v3=(void*)(intptr_t)(a3), \
-        *__v4=(void*)(intptr_t)(a4), *__v5=(void*)(intptr_t)(a5), *__v6=(void*)(intptr_t)(a6), \
-        *__v7=(void*)(intptr_t)(a7), *__v8=(void*)(intptr_t)(a8), *__v9=(void*)(intptr_t)(a9); __auto_type __result =
+    ({ void *__v1=(void*)(intptr_t)(a1), *__v1_orig=(void*)(a1), *__v2=(void*)(intptr_t)(a2), *__v2_orig=(void*)(a2), *__v3=(void*)(intptr_t)(a3), *__v3_orig=(void*)(a3), \
+        *__v4=(void*)(intptr_t)(a4), *__v4_orig=(void*)(a4), *__v5=(void*)(intptr_t)(a5), *__v5_orig=(void*)(a5), *__v6=(void*)(intptr_t)(a6), *__v6_orig=(void*)(a6), \
+        *__v7=(void*)(intptr_t)(a7), *__v7_orig=(void*)(a7), *__v8=(void*)(intptr_t)(a8), *__v8_orig=(void*)(a8), *__v9=(void*)(intptr_t)(a9), *__v9_orig=(void*)(a9); __auto_type __result =
 
 #define MATCH_EXPR_10(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) \
-    ({ void *__v1=(void*)(intptr_t)(a1), *__v2=(void*)(intptr_t)(a2), *__v3=(void*)(intptr_t)(a3), \
-        *__v4=(void*)(intptr_t)(a4), *__v5=(void*)(intptr_t)(a5), *__v6=(void*)(intptr_t)(a6), \
-        *__v7=(void*)(intptr_t)(a7), *__v8=(void*)(intptr_t)(a8), *__v9=(void*)(intptr_t)(a9), \
-        *__v10=(void*)(intptr_t)(a10); __auto_type __result =
+    ({ void *__v1=(void*)(intptr_t)(a1), *__v1_orig=(void*)(a1), *__v2=(void*)(intptr_t)(a2), *__v2_orig=(void*)(a2), *__v3=(void*)(intptr_t)(a3), *__v3_orig=(void*)(a3), \
+        *__v4=(void*)(intptr_t)(a4), *__v4_orig=(void*)(a4), *__v5=(void*)(intptr_t)(a5), *__v5_orig=(void*)(a5), *__v6=(void*)(intptr_t)(a6), *__v6_orig=(void*)(a6), \
+        *__v7=(void*)(intptr_t)(a7), *__v7_orig=(void*)(a7), *__v8=(void*)(intptr_t)(a8), *__v8_orig=(void*)(a8), *__v9=(void*)(intptr_t)(a9), *__v9_orig=(void*)(a9), \
+        *__v10=(void*)(intptr_t)(a10), *__v10_orig=(void*)(a10); __auto_type __result =
 
 #define in(expr) (expr); __result; })
 
@@ -631,61 +745,60 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
 #define IS_DISPATCH(N, ...) IS_DISPATCH_(N, __VA_ARGS__)
 #define IS_DISPATCH_(N, ...) IS_##N(__VA_ARGS__)
 
-#define IS_1(x1) evaluate_pattern((intptr_t)__v1, _auto_pattern(x1))
-#define IS_2(x1, x2) (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)))
-#define IS_3(x1, x2, x3) (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)))
-#define IS_4(x1, x2, x3, x4) (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)))
-#define IS_5(x1, x2, x3, x4, x5) (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)))
+#define IS_1(x1) evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1))
+#define IS_2(x1, x2) (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)))
+#define IS_3(x1, x2, x3) (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)))
+#define IS_4(x1, x2, x3, x4) (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)))
+#define IS_5(x1, x2, x3, x4, x5) (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)))
 #define IS_6(x1, x2, x3, x4, x5, x6) \
-    (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-     evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-     evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-     evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-     evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-     evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)))
+    (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+     evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+     evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+     evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+     evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+     evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)))
 
 #define IS_7(x1, x2, x3, x4, x5, x6, x7) \
-    (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-     evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-     evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-     evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-     evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-     evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-     evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)))
+    (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+     evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+     evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+     evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+     evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+     evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+     evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)))
 
 #define IS_8(x1, x2, x3, x4, x5, x6, x7, x8) \
-    (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-     evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-     evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-     evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-     evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-     evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-     evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && \
-     evaluate_pattern((intptr_t)__v8, _auto_pattern(x8)))
+    (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+     evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+     evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+     evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+     evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+     evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+     evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && \
+     evaluate_pattern_enhanced(__v8_orig, (intptr_t)__v8, _auto_pattern(x8)))
 
 #define IS_9(x1, x2, x3, x4, x5, x6, x7, x8, x9) \
-    (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-     evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-     evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-     evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-     evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-     evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-     evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && \
-     evaluate_pattern((intptr_t)__v8, _auto_pattern(x8)) && \
-     evaluate_pattern((intptr_t)__v9, _auto_pattern(x9)))
+    (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+     evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+     evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+     evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+     evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+     evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+     evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && \
+     evaluate_pattern_enhanced(__v8_orig, (intptr_t)__v8, _auto_pattern(x8)) && \
+     evaluate_pattern_enhanced(__v9_orig, (intptr_t)__v9, _auto_pattern(x9)))
 
 #define IS_10(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) \
-    (evaluate_pattern((intptr_t)__v1, _auto_pattern(x1)) && \
-     evaluate_pattern((intptr_t)__v2, _auto_pattern(x2)) && \
-     evaluate_pattern((intptr_t)__v3, _auto_pattern(x3)) && \
-     evaluate_pattern((intptr_t)__v4, _auto_pattern(x4)) && \
-     evaluate_pattern((intptr_t)__v5, _auto_pattern(x5)) && \
-     evaluate_pattern((intptr_t)__v6, _auto_pattern(x6)) && \
-     evaluate_pattern((intptr_t)__v7, _auto_pattern(x7)) && \
-     evaluate_pattern((intptr_t)__v8, _auto_pattern(x8)) && \
-     evaluate_pattern((intptr_t)__v9, _auto_pattern(x9)) && \
-     evaluate_pattern((intptr_t)__v10, _auto_pattern(x10)))
-
+    (evaluate_pattern_enhanced(__v1_orig, (intptr_t)__v1, _auto_pattern(x1)) && \
+     evaluate_pattern_enhanced(__v2_orig, (intptr_t)__v2, _auto_pattern(x2)) && \
+     evaluate_pattern_enhanced(__v3_orig, (intptr_t)__v3, _auto_pattern(x3)) && \
+     evaluate_pattern_enhanced(__v4_orig, (intptr_t)__v4, _auto_pattern(x4)) && \
+     evaluate_pattern_enhanced(__v5_orig, (intptr_t)__v5, _auto_pattern(x5)) && \
+     evaluate_pattern_enhanced(__v6_orig, (intptr_t)__v6, _auto_pattern(x6)) && \
+     evaluate_pattern_enhanced(__v7_orig, (intptr_t)__v7, _auto_pattern(x7)) && \
+     evaluate_pattern_enhanced(__v8_orig, (intptr_t)__v8, _auto_pattern(x8)) && \
+     evaluate_pattern_enhanced(__v9_orig, (intptr_t)__v9, _auto_pattern(x9)) && \
+     evaluate_pattern_enhanced(__v10_orig, (intptr_t)__v10, _auto_pattern(x10)))
 // ============================================================================
 // Do Blocks for Complex Expressions
 // ============================================================================
@@ -706,5 +819,197 @@ static inline int evaluate_pattern(intptr_t actual, void* pattern) {
  * 
  * The last expression in the do block becomes the return value.
  */
+
+// ============================================================================
+// OPTION TYPES - Nullable Value Handling
+// ============================================================================
+
+/*
+ * Generic Option Type Generator (inspired by Rust's Option<T>)
+ * 
+ * This provides macros to generate Option types for any data type,
+ * making nullable value handling safe and explicit while integrating
+ * seamlessly with the pattern matching system.
+ * 
+ * Usage:
+ *   CreateOption(int)        -> Option_int type
+ *   CreateOption(MyStruct)   -> Option_MyStruct type
+ *   CreateOption(char*)      -> Option_char_ptr type (special handling for pointers)
+ * 
+ * Each generated Option type has:
+ *   - Some and None variants
+ *   - Helper functions: some_TypeName() and none_TypeName()
+ *   - Compatible with the match system using variant(Some) and variant(None)
+ * 
+ * Option Pattern Matching Examples:
+ * 
+ *   // Create a custom Option type
+ *   typedef struct { int x, y; } Point;
+ *   CreateOption(Point)
+ * 
+ *   // Function that returns an Option
+ *   Option_Point find_point(int id) {
+ *       if (id == 42) {
+ *           Point p = {10, 20};
+ *           return some_Point(p);
+ *       }
+ *       return none_Point();
+ *   }
+ * 
+ *   // Pattern match on the option
+ *   Option_Point option = find_point(42);
+ *   match(&option) {
+ *       when(Some) {
+ *           Point p = it(Point);
+ *           printf("Found point: (%d, %d)\n", p.x, p.y);
+ *       }
+ *       when(None) {
+ *           printf("Point not found\n");
+ *       }
+ *   }
+ * 
+ *   // Expression form with Options
+ *   int status = match_expr(&option) in(
+ *       is(Some) ? 1 : 0
+ *   );
+ * 
+ *   // Utility functions
+ *   if (is_some(&option)) {
+ *       Point p = option.value;
+ *       // use point...
+ *   }
+ * 
+ *   Point default_point = {0, 0};
+ *   Point p = unwrap_option_or(&option, default_point);
+ * 
+ *   // Chaining operations
+ *   Option_int doubled = OPTION_MAP(&some_int(21), lambda(int x) { return x * 2; }, int);
+ * 
+ *   // Convert between Option and Result
+ *   Result_Point result = OPTION_TO_RESULT(&option, "Point not found", Point);
+ *   Option_Point back_to_option = RESULT_TO_OPTION(&result, Point);
+ */
+
+// ============================================================================
+// OPTION TYPES IMPLEMENTATION
+// ============================================================================
+
+// Common option tags
+typedef enum {
+    Some = 3,
+    None = 4
+} OptionTag;
+
+// ============================================================================
+// Macro to create Option types for any type
+// ============================================================================
+
+#define CreateOption(TYPE) \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
+        union { \
+            TYPE value; \
+            char _padding_union[1]; /* Ensures union is not empty when None */ \
+        }; \
+    } Option_##TYPE; \
+    \
+    static inline Option_##TYPE some_##TYPE(TYPE val) { \
+        return (Option_##TYPE){Some, 0, .value = val}; \
+    } \
+    \
+    static inline Option_##TYPE none_##TYPE(void) { \
+        return (Option_##TYPE){None, 0, ._padding_union = {0}}; \
+    }
+
+// ============================================================================
+// Special macro for pointer types (handles the * in the name)
+// ============================================================================
+
+#define CreateOptionPtr(TYPE, SUFFIX) \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
+        union { \
+            TYPE* value; \
+            char _padding_union[1]; /* Ensures union is not empty when None */ \
+        }; \
+    } Option_##SUFFIX; \
+    \
+    static inline Option_##SUFFIX some_##SUFFIX(TYPE* val) { \
+        return (Option_##SUFFIX){Some, 0, .value = val}; \
+    } \
+    \
+    static inline Option_##SUFFIX none_##SUFFIX(void) { \
+        return (Option_##SUFFIX){None, 0, ._padding_union = {0}}; \
+    }
+
+// ============================================================================
+// Predefined common Option types
+// ============================================================================
+
+// Basic types
+CreateOption(int)
+CreateOption(float)
+CreateOption(double)
+CreateOption(long)
+CreateOption(size_t)
+
+// Pointer types with clean names
+CreateOptionPtr(char, char_ptr)
+CreateOptionPtr(void, void_ptr)
+
+// ============================================================================
+// Generic helper macros for working with any Option type
+// ============================================================================
+
+#define is_some(option_ptr) ((option_ptr)->tag == Some)
+#define is_none(option_ptr) ((option_ptr)->tag == None)
+
+#define unwrap_option_or(option_ptr, default_val) \
+    (is_some(option_ptr) ? (option_ptr)->value : (default_val))
+
+#define unwrap_option_or_else(option_ptr, func) \
+    (is_some(option_ptr) ? (option_ptr)->value : func())
+
+// ============================================================================
+// Option utilities
+// ============================================================================
+
+// Common default values
+#define DEFAULT_INT 0
+#define DEFAULT_FLOAT 0.0f
+#define DEFAULT_DOUBLE 0.0
+#define DEFAULT_LONG 0L
+#define DEFAULT_SIZE_T 0UL
+
+// ============================================================================
+// Option chaining operations (monadic-style)
+// ============================================================================
+
+#define OPTION_MAP(option_ptr, func, option_type) \
+    (is_some(option_ptr) ? some_##option_type(func((option_ptr)->value)) : \
+                           none_##option_type())
+
+#define OPTION_AND_THEN(option_ptr, func) \
+    (is_some(option_ptr) ? func((option_ptr)->value) : *option_ptr)
+
+#define OPTION_FILTER(option_ptr, predicate) \
+    (is_some(option_ptr) && predicate((option_ptr)->value) ? *option_ptr : \
+     (typeof(*option_ptr)){None, 0, ._padding_union = {0}})
+
+// ============================================================================
+// Option conversion utilities
+// ============================================================================
+
+// Convert Option to Result
+#define OPTION_TO_RESULT(option_ptr, error_msg, result_type) \
+    (is_some(option_ptr) ? ok_##result_type((option_ptr)->value) : \
+                           err_##result_type(error_msg))
+
+// Convert Result to Option (discards error information)
+#define RESULT_TO_OPTION(result_ptr, option_type) \
+    (is_ok(result_ptr) ? some_##option_type((result_ptr)->value) : \
+                         none_##option_type())
 
 #endif // MATCH_H
