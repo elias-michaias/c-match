@@ -30,7 +30,7 @@ match(greeting, name, age) {
         printf("Welcome, Alice!\n");
     }
     when("Hi", __, 12) {
-        printf("Hello, pre-teen!\n");
+        printf("Hello, pre-teen named %s!\n", name);
     }
     when("Hi", __, lt(18)) {
         printf("Hey there, young one!\n");
