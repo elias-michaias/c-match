@@ -27,19 +27,19 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 // Statement form
 match(greeting, name, age) {
     when("Hello", "Alice", ge(18)) {
-        printf("Welcome, Alice!\n");
+        printf("Hello, Alice!\n");
     }
     when("Hi", __, 12) {
-        printf("Hello, pre-teen named %s!\n", name);
+        printf("Hi pre-teen named %s!\n", name);
     }
     when("Hi", __, lt(18)) {
-        printf("Hey there, young one!\n");
+        printf("Hi there, young one!\n");
     }
     when("Hi", __, __) {
-        printf("General greeting\n");
+        printf("Hi there!\n");
     }
     otherwise {
-        printf("Can't greet\n");
+        printf("Welcome\n");
     }
 }
 
