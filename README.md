@@ -450,8 +450,6 @@ Contributions are welcome! Please:
 - Comprehensive test suite
 - Complete documentation
 
-## Performance
-
 ## Building
 
 ```bash
