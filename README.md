@@ -8,8 +8,9 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 - **Zero runtime overhead** - compiles to optimal assembly identical to hand-written C
 - **Rich pattern support**: literals, wildcards, inequalities, ranges, tagged unions
 - **Enum and tagged union destructuring** with automatic value extraction via `it(TYPE)`
+- **Option types** - Full `Option<T>` system with `CreateOption(TYPE)` macro, `some_TYPE()`, `none_TYPE()`, helper functions, and seamless pattern matching
 - **Result types** - Full `Result<T, E>` system with `CreateResult(TYPE)` macro, `ok_TYPE()`, `err_TYPE()`, helper functions, and seamless pattern matching
-- **Two forms**: Statement form `match() { when() ... }` and expression form `match_expr() in( is() ? ... : ... )`
+- **Two forms**: Statement form `match() { when() ... }` and expression form `let() in( is() ? ... : ... )`
 - **Do blocks** for complex operations in expression form `is () ? do(...) : do(...)`
 - **Automatic type conversion** using `_Generic`
 - **Single header** - just include `match.h`
@@ -26,6 +27,27 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 ```c
 #include "match.h"
 
+// Option types - elegant null handling
+Option_int find_value(int *array, int size, int target) {
+    for (int i = 0; i < size; i++) {
+        if (array[i] == target) {
+            return some_int(array[i]);
+        }
+    }
+    return none_int();
+}
+
+int array[] = {1, 2, 3, 4, 5};
+Option_int result = find_value(array, 5, 3);
+match(&result) {
+    when(Some) {
+        printf("Found: %d\n", it(int));
+    }
+    when(None) {
+        printf("Not found\n");
+    }
+}
+
 // Result types - powerful error handling
 Result_int divide(int a, int b) {
     if (b == 0) {
@@ -36,10 +58,10 @@ Result_int divide(int a, int b) {
 
 Result_int result = divide(10, 2);
 match(&result) {
-    when(variant(Ok)) {
+    when(Ok) {
         printf("Success: %d\n", it(int));
     }
-    when(variant(Err)) {
+    when(Err) {
         printf("Error: %s\n", it(char*));
     }
 }
@@ -63,8 +85,8 @@ match(greeting, name, age) {
     }
 }
 
-// Expression form
-int output = match_expr(score, attempts) in(
+// Expression form with clean 'let' syntax
+int output = let(score, attempts) in(
     is(100, 1) ? "A+"  
     : is(ge(90), le(3)) ? "A"
     : is(ge(80), le(5)) ? "B"
@@ -75,7 +97,7 @@ int output = match_expr(score, attempts) in(
 );
 
 // With do blocks for complex operations
-int complex = match_expr(value) in(
+int complex = let(value) in(
     is(gt(50)) ? do(
         printf("Processing large value: %d\n", value);
         int temp = value * 2;
@@ -124,7 +146,7 @@ int main() {
 int main() {
     int score = 85;
     
-    char grade = match_expr(score) in(
+    char grade = let(score) in(
         is(ge(90)) ? 'A'
         : is(ge(80)) ? 'B'
         : is(ge(70)) ? 'C'
@@ -161,7 +183,43 @@ int main() {
 }
 ```
 
-### Step 5: Result Types for Error Handling
+### Step 5: Option Types for Null Safety
+```c
+// Function that might not return a value
+Option_int find_first_positive(int *array, int size) {
+    for (int i = 0; i < size; i++) {
+        if (array[i] > 0) {
+            return some_int(array[i]);
+        }
+    }
+    return none_int();
+}
+
+int main() {
+    int numbers[] = {-5, -2, 0, 3, 8, -1};
+    Option_int result = find_first_positive(numbers, 6);
+    
+    match(&result) {
+        when(Some) {
+            printf("First positive number: %d\n", it(int));
+        }
+        when(None) {
+            printf("No positive numbers found\n");
+        }
+    }
+    
+    // Helper functions
+    if (is_some(&result)) {
+        printf("Found value: %d\n", unwrap_option_or(&result, 0));
+    } else {
+        printf("Using default value: %d\n", unwrap_option_or(&result, -1));
+    }
+    
+    return 0;
+}
+```
+
+### Step 7: Result Types for Error Handling
 ```c
 // Function that can fail
 Result_int safe_divide(int a, int b) {
@@ -175,10 +233,10 @@ int main() {
     Result_int result = safe_divide(10, 2);
     
     match(&result) {
-        when(variant(Ok)) {
+        when(Ok) {
             printf("Result: %d\n", it(int));
         }
-        when(variant(Err)) {
+        when(Err) {
             printf("Error: %s\n", it(char*));
         }
     }
@@ -192,7 +250,7 @@ int main() {
 }
 ```
 
-### Step 6: Compilation
+### Step 8: Compilation
 ```bash
 # Basic compilation
 gcc -std=c11 -Wall -O2 your_program.c -o your_program
@@ -257,6 +315,225 @@ make asm
 | `range(low, high)` | Exclusive range | `when(range(10, 20))` | 10 < value < 20 |
 | `between(low, high)` | Inclusive range | `when(between(10, 20))` | 10 <= value <= 20 |
 | `variant(tag)` | Tagged union match | `when(variant(TAG_INT))` | Union tag match |
+
+## Option Types
+
+The library includes a comprehensive Option type system, providing elegant null handling and seamless integration with the pattern matching system.
+
+### Basic Option Usage
+
+```c
+#include "match.h"
+
+// Option_int is automatically available
+Option_int find_value(int *array, int size, int target) {
+    for (int i = 0; i < size; i++) {
+        if (array[i] == target) {
+            return some_int(array[i]);
+        }
+    }
+    return none_int();
+}
+
+int main() {
+    int array[] = {1, 2, 3, 4, 5};
+    Option_int result = find_value(array, 5, 3);
+    
+    // Pattern matching with Options
+    match(&result) {
+        when(Some) {
+            printf("Found: %d\n", it(int));
+        }
+        when(None) {
+            printf("Not found\n");
+        }
+    }
+    
+    return 0;
+}
+```
+
+### Creating Custom Option Types
+
+Generate Option types for any type using the `CreateOption` macro:
+
+```c
+// Define your types
+typedef struct {
+    int x, y;
+} Point;
+
+typedef struct {
+    char name[32];
+    int age;
+} Person;
+
+// Generate Option types
+CreateOption(Point)
+CreateOption(Person)
+CreateOption(float)
+CreateOption(char_ptr)
+
+// Now you can use Option_Point, Option_Person, etc.
+Option_Point create_point(int x, int y) {
+    if (x < 0 || y < 0) {
+        return none_Point();
+    }
+    Point p = {x, y};
+    return some_Point(p);
+}
+
+Option_Person create_person(const char* name, int age) {
+    if (age < 0 || age > 150) {
+        return none_Person();
+    }
+    if (strlen(name) == 0) {
+        return none_Person();
+    }
+    Person person = {0};
+    strncpy(person.name, name, sizeof(person.name) - 1);
+    person.age = age;
+    return some_Person(person);
+}
+```
+
+### Available Option Macros
+
+| Macro | Description | Example |
+|-------|-------------|---------|
+| `CreateOption(TYPE)` | Generate Option_TYPE | `CreateOption(int)` |
+| `some_TYPE(value)` | Create Some value | `some_int(42)` |
+| `none_TYPE()` | Create None value | `none_int()` |
+| `is_some(option_ptr)` | Check if Option is Some | `is_some(&option)` |
+| `is_none(option_ptr)` | Check if Option is None | `is_none(&option)` |
+| `unwrap_option_or(option_ptr, default)` | Get value or default | `unwrap_option_or(&option, 0)` |
+
+### Option Pattern Matching
+
+Options work seamlessly with the pattern matching system:
+
+```c
+// Statement form
+Option_int results[] = {
+    some_int(42),
+    none_int(),
+    some_int(0)
+};
+
+for (int i = 0; i < 3; i++) {
+    match(&results[i]) {
+        when(variant(Some)) {
+            printf("Found: %d\n", it(int));
+        }
+        when(variant(None)) {
+            printf("Not found\n");
+        }
+    }
+}
+
+// Expression form
+const char* classify_option(Option_int* option) {
+    return let(option) in(
+        is(variant(Some)) ? (it(int) > 0 ? "positive" : 
+                          it(int) < 0 ? "negative" : "zero") :
+        is(variant(None)) ? "none" :
+        "unknown"
+    );
+}
+```
+
+### Error Handling with Options
+
+```c
+// Chain operations with short-circuiting
+Option_int process_data(int input) {
+    Option_int step1 = validate_input(input);
+    if (is_none(&step1)) {
+        return step1;  // Short-circuit on None
+    }
+    
+    Option_int step2 = transform_data(unwrap_option_or(&step1, 0));
+    if (is_none(&step2)) {
+        return step2;  // Short-circuit on None
+    }
+    
+    return finalize_data(unwrap_option_or(&step2, 0));
+}
+
+// Pattern-based error handling
+void handle_file_operation(const char* filename) {
+    Option_char_ptr file_result = read_file(filename);
+    
+    match(&file_result) {
+        when(variant(Some)) {
+            char* content = it(char*);
+            printf("File content: %s\n", content);
+            free(content);
+        }
+        when(variant(None)) {
+            printf("File not found: %s\n", filename);
+        }
+    }
+}
+```
+
+### Built-in Option Constants
+
+Common Option values are predefined:
+
+```c
+// Available Option constants
+SOME_NULL_POINTER        // Some null pointer
+NONE_INVALID_ARGUMENT    // None for invalid argument
+SOME_OUT_OF_BOUNDS       // Some out of bounds index
+NONE_ALLOCATION_FAILED   // None for memory allocation failure
+SOME_INVALID_STATE       // Some invalid state
+NONE_NOT_FOUND          // None for not found
+SOME_PERMISSION_DENIED   // Some permission denied
+NONE_TIMEOUT            // None for operation timed out
+NONE_UNSUPPORTED        // None for unsupported operation
+NONE_UNKNOWN            // None for unknown error
+
+// Usage
+Option_char_ptr allocate_buffer(size_t size) {
+    if (size == 0) {
+        return none_char_ptr();
+    }
+    
+    char* buffer = malloc(size);
+    if (!buffer) {
+        return none_char_ptr();
+    }
+    
+    return some_char_ptr(buffer);
+}
+```
+
+### Advanced Option Patterns
+
+```c
+// Complex error handling with nested matching
+Option_int calculate_score(int base, int multiplier, int bonus) {
+    return let(base, multiplier) in(
+        is(le(0), __) ? none_int() :
+        is(__, le(0)) ? none_int() :
+        is(gt(1000), __) ? none_int() :
+        is(__, gt(10)) ? none_int() :
+        some_int(base * multiplier + bonus)
+    );
+}
+
+// Option transformation
+Option_float to_percentage(Option_int* score, int max_score) {
+    return let(score) in(
+        is(variant(Some)) ? (it(int) > max_score ? 
+                          none_float() :
+                          some_float((float)it(int) / max_score * 100.0f)) :
+        is(variant(None)) ? none_float() :
+        none_float()
+    );
+}
+```
 
 ## Result Types
 
@@ -379,7 +656,7 @@ for (int i = 0; i < 3; i++) {
 
 // Expression form
 const char* classify_result(Result_int* result) {
-    return match_expr(result) in(
+    return let(result) in(
         is(variant(Ok)) ? (it(int) > 0 ? "positive" : 
                           it(int) < 0 ? "negative" : "zero") :
         is(variant(Err)) ? "error" :
@@ -468,7 +745,7 @@ Result_char_ptr allocate_buffer(size_t size) {
 ```c
 // Complex error handling with nested matching
 Result_int calculate_score(int base, int multiplier, int bonus) {
-    return match_expr(base, multiplier) in(
+    return let(base, multiplier) in(
         is(le(0), __) ? err_int("Base score must be positive") :
         is(__, le(0)) ? err_int("Multiplier must be positive") :
         is(gt(1000), __) ? err_int("Base score too high") :
@@ -479,7 +756,7 @@ Result_int calculate_score(int base, int multiplier, int bonus) {
 
 // Result transformation
 Result_float to_percentage(Result_int* score, int max_score) {
-    return match_expr(score) in(
+    return let(score) in(
         is(variant(Ok)) ? (it(int) > max_score ? 
                           err_float("Score exceeds maximum") :
                           ok_float((float)it(int) / max_score * 100.0f)) :
@@ -488,16 +765,6 @@ Result_float to_percentage(Result_int* score, int max_score) {
     );
 }
 ```
-
-### Result Type Performance
-
-Result types are implemented as tagged unions with zero runtime overhead:
-- No heap allocation
-- No function call overhead
-- Compiles to optimal assembly
-- Suitable for embedded systems and performance-critical code
-
-The Result system uses the same underlying tagged union mechanism as other pattern matching features, ensuring consistent performance characteristics.
 
 ## Enums and Tagged Unions
 
@@ -583,236 +850,7 @@ match(&value) {
 
 ### Real-World Example: Result Type
 
-Here's a practical example implementing a Result type similar to Rust:
-
-```c
-typedef enum {
-    Ok = 1,
-    Err = 2
-} ResultTag;
-
-typedef struct {
-    uint32_t tag;
-    union {
-        int value;
-        char* error_msg;
-    };
-} Result;
-
-// Helper functions
-Result ok(int value) {
-    return (Result){Ok, .value = value};
-}
-
-Result error(const char* msg) {
-    return (Result){Err, .error_msg = (char*)msg};
-}
-
-// Usage
-Result divide(int a, int b) {
-    if (b == 0) {
-        return error("Division by zero");
-    }
-    return ok(a / b);
-}
-
-void process_result(Result result) {
-    match(&result) {
-        when(variant(Ok)) {
-            printf("Success: %d\n", it(int));
-        }
-        when(variant(Err)) {
-            printf("Error: %s\n", it(char*));
-        }
-    }
-}
-
-int main() {
-    process_result(divide(10, 2));  // Success: 5
-    process_result(divide(10, 0));  // Error: Division by zero
-    return 0;
-}
-```
-
-### Complex Example: JSON Values
-
-```c
-typedef enum {
-    JSON_NULL = 1,
-    JSON_BOOL = 2,
-    JSON_NUMBER = 3,
-    JSON_STRING = 4,
-    JSON_ARRAY = 5,
-    JSON_OBJECT = 6
-} JsonTag;
-
-typedef struct {
-    uint32_t tag;
-    union {
-        int null_val;
-        int bool_val;
-        double number_val;
-        char* string_val;
-        void* array_val;
-        void* object_val;
-    };
-} JsonValue;
-
-const char* json_type_name(JsonValue* value) {
-    return match_expr(value) in(
-        is(variant(JSON_NULL)) ? "null" :
-        is(variant(JSON_BOOL)) ? "boolean" :
-        is(variant(JSON_NUMBER)) ? "number" :
-        is(variant(JSON_STRING)) ? "string" :
-        is(variant(JSON_ARRAY)) ? "array" :
-        is(variant(JSON_OBJECT)) ? "object" :
-        "unknown"
-    );
-}
-
-void print_json_value(JsonValue* value) {
-    match(value) {
-        when(variant(JSON_NULL)) {
-            printf("null");
-        }
-        when(variant(JSON_BOOL)) {
-            printf(it(int) ? "true" : "false");
-        }
-        when(variant(JSON_NUMBER)) {
-            printf("%.2f", it(double));
-        }
-        when(variant(JSON_STRING)) {
-            printf("\"%s\"", it(char*));
-        }
-        when(variant(JSON_ARRAY)) {
-            printf("[array]");
-        }
-        when(variant(JSON_OBJECT)) {
-            printf("{object}");
-        }
-        otherwise {
-            printf("invalid");
-        }
-    }
-}
-```
-
-### Expression Form with Tagged Unions
-
-Tagged unions work seamlessly in expression form:
-
-```c
-int get_priority(TaggedValue* value) {
-    return match_expr(value) in(
-        is(variant(TAG_INT)) ? (it(int) > 100 ? 1 : 2) :
-        is(variant(TAG_FLOAT)) ? (it(float) > 50.0 ? 1 : 2) :
-        is(variant(TAG_STRING)) ? (strlen(it(char*)) > 10 ? 1 : 2) :
-        is(variant(TAG_BOOL)) ? (it(int) ? 1 : 3) :
-        0
-    );
-}
-```
-
-### Nested Matching with Tagged Unions
-
-You can nest pattern matching for complex logic:
-
-```c
-match(&result) {
-    when(variant(Ok)) {
-        int value = it(int);
-        match(value) {
-            when(0) {
-                printf("Success with zero value\n");
-            }
-            when(gt(100)) {
-                printf("Success with large value: %d\n", value);
-            }
-            otherwise {
-                printf("Success with value: %d\n", value);
-            }
-        }
-    }
-    when(variant(Err)) {
-        char* msg = it(char*);
-        match(strlen(msg)) {
-            when(gt(50)) {
-                printf("Long error message: %.50s...\n", msg);
-            }
-            otherwise {
-                printf("Error: %s\n", msg);
-            }
-        }
-    }
-}
-```
-
-### Tagged Union Requirements
-
-For tagged unions to work properly:
-
-1. **Tag field must be first**: The tag must be the first field in your struct
-2. **Tag must be uint32_t**: Use `uint32_t` for the tag field
-3. **Pass by pointer**: Pass the struct pointer to `match()` using `&`
-4. **Use it() macro**: Access matched values with `it(type)`
-
-### Struct Layout Considerations
-
-The library handles struct padding automatically:
-
-```c
-// Normal struct (with padding) - works automatically
-typedef struct {
-    uint32_t tag;    // 4 bytes
-    // 4 bytes padding on 64-bit systems
-    union {
-        int int_val;     // offset 8
-        double double_val;
-        char* string_val;
-    };
-} TaggedValue;
-
-// Packed struct - define VARIANT_UNION_OFFSET as 4
-#define VARIANT_UNION_OFFSET 4
-#include "match.h"
-
-typedef struct __attribute__((packed)) {
-    uint32_t tag;    // 4 bytes
-    union {
-        int int_val;     // offset 4
-        float float_val;
-        char string_val[16];
-    };
-} PackedTaggedValue;
-```
-
-### Legacy Interface
-
-For backward compatibility, `variant_value()` is still supported:
-
-```c
-// New interface (preferred)
-when(variant(TAG_INT)) {
-    printf("Value: %d\n", it(int));
-}
-
-// Legacy interface (still works)
-when(variant(TAG_INT)) {
-    printf("Value: %d\n", variant_value(int));
-}
-```
-
-### Performance Notes
-
-Tagged union matching is zero-overhead:
-- Tag comparison compiles to a simple integer comparison
-- Value extraction is just pointer arithmetic
-- No function calls or dynamic dispatch
-- Identical performance to hand-written switch statements
-
-## Complete Example
-
-Here's a comprehensive example showing HTTP status code processing:
+Here's a practical example showing HTTP status code processing:
 
 ```c
 #include <stdio.h>
@@ -821,7 +859,7 @@ Here's a comprehensive example showing HTTP status code processing:
 
 // Function using expression form
 int process_http_status(int code) {
-    return match_expr(code) in(
+    return let(code) in(
         is(between(200, 299)) ? 0 :      // Success
         is(between(300, 399)) ? 1 :      // Redirect
         is(between(400, 499)) ? 2 :      // Client error
@@ -905,7 +943,7 @@ match(x, y, z) {
 
 ### Expression Form with Complex Logic
 ```c
-int category = match_expr(score, attempts, bonus) in(
+int category = let(score, attempts, bonus) in(
     is(ge(90), le(3), gt(0)) ? 1 :  // High score, few attempts, bonus
     is(ge(80), le(5), __) ? 2 :     // Good score, reasonable attempts
     is(ge(70), __, __) ? 3 :        // Passing score
@@ -915,7 +953,7 @@ int category = match_expr(score, attempts, bonus) in(
 
 ### Do Blocks for Complex Operations
 ```c
-char* result = match_expr(error_code) in(
+char* result = let(error_code) in(
     is(between(400, 499)) ? do(
         log_error("Client error: %d", error_code);
         increment_error_count();
@@ -940,7 +978,7 @@ match(category) {
         }
     }
     when(2) {
-        int action = match_expr(priority) in(
+        int action = let(priority) in(
             is(gt(8)) ? URGENT :
             is(gt(5)) ? NORMAL : LOW
         );
@@ -967,7 +1005,7 @@ The system compiles to identical optimized assembly as equivalent if-else chains
 
 ```c
 // This pattern matching code...
-int result = match_expr(value) in(
+int result = let(value) in(
     is(gt(100)) ? 1 :
     is(gt(50)) ? 2 : 3
 );
@@ -995,7 +1033,7 @@ match(value1, value2, ...) {
 
 ### Expression Form
 ```c
-result = match_expr(value1, value2, ...) in(
+result = let(value1, value2, ...) in(
     is(pattern1, pattern2, ...) ? expression1 :
     is(pattern3, pattern4, ...) ? expression2 :
     default_expression

@@ -165,35 +165,6 @@
 #include <stddef.h>
 
 // ============================================================================
-// TYPE EXPRESSION MACROS
-// ============================================================================
-
-/*
- * Type expression macros that expand to the correct typedef names.
- * 
- * Usage:
- *   Option(int) func();           -> Option_int func();
- *   Result(char*) parse_string(); -> Result_char_ptr parse_string();
- *   Option(MyStruct) data;        -> Option_MyStruct data;
- * 
- * These macros handle pointer types automatically by converting * to _ptr.
- */
-
-// Helper macros for concatenation
-#define _CONCAT(a, b) a##b
-#define CONCAT(a, b) _CONCAT(a, b)
-
-// Type expression macros that simply concatenate to form the correct type names
-#define Option(TYPE) CONCAT(Option_, TYPE)
-#define Result(TYPE) CONCAT(Result_, TYPE)
-
-// Special handling for common pointer types using overrides
-#define Option_char_star Option_char_ptr
-#define Result_char_star Result_char_ptr
-#define Option_void_star Option_void_ptr
-#define Result_void_star Result_void_ptr
-
-// ============================================================================
 // RESULT TYPES IMPLEMENTATION
 // ============================================================================
 
@@ -261,6 +232,12 @@ CreateResult(size_t)
 // Pointer types with clean names
 CreateResultPtr(char, char_ptr)
 CreateResultPtr(void, void_ptr)
+CreateResultPtr(int, int_ptr)
+CreateResultPtr(float, float_ptr)
+CreateResultPtr(double, double_ptr)
+CreateResultPtr(long, long_ptr)
+CreateResultPtr(short, short_ptr)
+CreateResultPtr(size_t, size_t_ptr)
 
 // ============================================================================
 // Generic helper macros for working with any Result type
@@ -693,9 +670,11 @@ static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void
 
 // ============================================================================
 // Expression Form: match_expr() in( is() ? ... : ... )
+// Clean alias: let() in( is() ? ... : ... )
 // ============================================================================
 
 #define match_expr(...) MATCH_EXPR_DISPATCH(COUNT_ARGS(__VA_ARGS__), __VA_ARGS__)
+#define let(...) match_expr(__VA_ARGS__)  // Clean alias for match_expr
 #define MATCH_EXPR_DISPATCH(N, ...) MATCH_EXPR_DISPATCH_(N, __VA_ARGS__)
 #define MATCH_EXPR_DISPATCH_(N, ...) MATCH_EXPR_##N(__VA_ARGS__)
 
@@ -958,6 +937,12 @@ CreateOption(size_t)
 // Pointer types with clean names
 CreateOptionPtr(char, char_ptr)
 CreateOptionPtr(void, void_ptr)
+CreateOptionPtr(int, int_ptr)
+CreateOptionPtr(float, float_ptr)
+CreateOptionPtr(double, double_ptr)
+CreateOptionPtr(long, long_ptr)
+CreateOptionPtr(short, short_ptr)
+CreateOptionPtr(size_t, size_t_ptr)
 
 // ============================================================================
 // Generic helper macros for working with any Option type
