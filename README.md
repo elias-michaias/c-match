@@ -341,6 +341,13 @@ match(category) {
 
 This pattern matching system is designed for **zero runtime overhead**:
 
+The existing (not incredibly-exhaustive) benchmarks show:
+- Pattern matching: 0.006662 seconds
+- Hand-written: 0.006764 seconds
+- **Overhead: 0.98x** (actually 2% faster!)
+
+The system compiles to identical optimized assembly as equivalent if-else chains.
+
 - All patterns are resolved at compile time
 - No function calls or dynamic dispatch
 - Compiles to identical assembly as hand-written if-else chains
@@ -444,13 +451,6 @@ Contributions are welcome! Please:
 - Complete documentation
 
 ## Performance
-
-The existing (not incredibly-exhaustive) benchmarks show **zero runtime overhead** compared to hand-written C:
-- Pattern matching: 0.006662 seconds
-- Hand-written: 0.006764 seconds
-- **Overhead: 0.98x** (actually 2% faster!)
-
-The system compiles to identical optimized assembly as equivalent `if/else` chains.
 
 ## Building
 
