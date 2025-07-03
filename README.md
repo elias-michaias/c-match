@@ -25,18 +25,21 @@ A zero-overhead pattern matching system for C that provides ergonomic syntax wit
 #include "match.h"
 
 // Statement form
-match(value) {
-    when(42) {
-        printf("The answer!\n");
+match(greeting, name, age) {
+    when("Hello", "Alice", ge(18)) {
+        printf("Welcome, Alice!\n");
     }
-    when(gt(100)) {
-        printf("Large number\n");
+    when("Hi", __, 12) {
+        printf("Hello, pre-teen!\n");
     }
-    when(range(10, 20)) {
-        printf("In range 10-20\n");
+    when("Hi", __, lt(18)) {
+        printf("Hey there, young one!\n");
+    }
+    when("Hi", __, __) {
+        printf("General greeting\n");
     }
     otherwise {
-        printf("Something else\n");
+        printf("Can't greet\n");
     }
 }
 
