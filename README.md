@@ -45,7 +45,7 @@ match(greeting, name, age) {
 
 // Expression form
 int result = match_expr(score, attempts) in(
-    is(100, 1) ? "A+"  // High score, few attempts
+    is(100, 1) ? "A+"  
     : is(ge(90), le(3)) ? "A"
     : is(ge(80), le(5)) ? "B"
     : is(ge(70), 5) ? "C" 
