@@ -39,7 +39,7 @@ match(greeting, name, age) {
         printf("Hi there!\n");
     }
     otherwise {
-        printf("Welcome\n");
+        printf("Welcome.\n");
     }
 }
 
