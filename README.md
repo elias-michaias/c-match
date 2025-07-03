@@ -58,6 +58,11 @@ int complex = match_expr(value) in(
         int temp = value * 2;
         temp + 10
     ) 
+    is(lt(50)) ? do(
+        printf("Processing small value: %d\n", value);
+        int temp = value + 5;
+        temp * 2
+    )
     : 0
 );
 ```
