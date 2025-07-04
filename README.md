@@ -451,9 +451,9 @@ for (int i = 0; i < 3; i++) {
 // Expression form
 const char* classify_option(Option_int* option) {
     return let(option) in(
-        is(Some) ? (option->value > 0 ? "positive" : 
+        is(Option_Some) ? (option->value > 0 ? "positive" : 
                     option->value < 0 ? "negative" : "zero") :
-        is(None) ? "none" :
+        is(Option_None) ? "none" :
         "unknown"
     );
 }
@@ -543,10 +543,10 @@ Option_int calculate_score(int base, int multiplier, int bonus) {
 // Option transformation
 Option_float to_percentage(Option_int* score, int max_score) {
     return let(score) in(
-        is(Some) ? (score->value > max_score ? 
+        is(Option_Some) ? (score->value > max_score ? 
                     none_float() :
                     some_float((float)score->value / max_score * 100.0f)) :
-        is(None) ? none_float() :
+        is(Option_None) ? none_float() :
         none_float()
     );
 }
@@ -674,9 +674,9 @@ for (int i = 0; i < 3; i++) {
 // Expression form
 const char* classify_result(Result_int* result) {
     return let(result) in(
-        is(Ok) ? (result->value > 0 ? "positive" : 
+        is(Result_Ok) ? (result->value > 0 ? "positive" : 
                   result->value < 0 ? "negative" : "zero") :
-        is(Err) ? "error" :
+        is(Result_Err) ? "error" :
         "unknown"
     );
 }
@@ -774,10 +774,10 @@ Result_int calculate_score(int base, int multiplier, int bonus) {
 // Result transformation
 Result_float to_percentage(Result_int* score, int max_score) {
     return let(score) in(
-        is(Ok) ? (score->value > max_score ? 
+        is(Result_Ok) ? (score->value > max_score ? 
                   err_float("Score exceeds maximum") :
                   ok_float((float)score->value / max_score * 100.0f)) :
-        is(Err) ? err_float(score->error) :
+        is(Result_Err) ? err_float(score->error) :
         err_float("Invalid result")
     );
 }
