@@ -110,6 +110,24 @@ int complex = let(value) in(
     )
     : 0
 );
+
+// Tagged unions - powerful sum types with one macro
+tag_union(Either, 
+    int, Number, 
+    char*, Text
+)
+
+Either e1 = new_Either_Number(42);
+Either e2 = new_Either_Text("hello");
+
+match(&e1) {
+    when(Either_Number) {
+        printf("Number: %d\n", e1.Number);
+    }
+    when(Either_Text) {
+        printf("Text: %s\n", e1.Text);
+    }
+}
 ```
 
 ## Getting Started
@@ -1122,3 +1140,68 @@ match/
 ## License
 
 MIT License - see LICENSE file for details.
+
+### Tagged Union Macro
+
+The `tag_union` macro provides a powerful way to generate tagged unions with a single declaration:
+
+```c
+#include "match.h"
+
+// Single macro call generates struct, enums, and constructors
+tag_union(Either, int, Number, char*, Text)
+
+// This generates:
+// - enum { Either_Number = 1, Either_Text = 2 }
+// - struct Either with tag field and union of Number/Text
+// - Constructor functions: new_Either_Number(), new_Either_Text()
+
+int main() {
+    // Create instances using generated constructors
+    Either e1 = new_Either_Number(42);
+    Either e2 = new_Either_Text("hello world");
+    
+    // Pattern matching with generated enum tags
+    match(&e1) {
+        when(Either_Number) {
+            printf("Number: %d\n", e1.Number);
+        }
+        when(Either_Text) {
+            printf("Text: %s\n", e1.Text);
+        }
+    }
+    
+    // Works with 2, 3, or 4 variants
+    tag_union(Color, int, Red, int, Green, int, Blue)
+    tag_union(Shape, int, Circle, float, Square, char*, Triangle, double, Rectangle)
+    
+    Color c = new_Color_Red(255);
+    Shape s = new_Shape_Circle(10);
+    
+    match(&c) {
+        when(Color_Red) { printf("Red: %d\n", c.Red); }
+        when(Color_Green) { printf("Green: %d\n", c.Green); }
+        when(Color_Blue) { printf("Blue: %d\n", c.Blue); }
+    }
+    
+    return 0;
+}
+```
+
+The `tag_union` macro syntax is:
+```c
+tag_union(Name, type1, field1, type2, field2, ...)
+```
+
+This generates:
+- **Enum constants**: `Name_field1`, `Name_field2`, etc.
+- **Struct type**: `Name` with `tag` field and union of variant fields
+- **Constructor functions**: `new_Name_field1()`, `new_Name_field2()`, etc.
+- **Pattern matching support**: Use enum constants with `when()` and `is()`
+
+**Features:**
+- Supports 2, 3, or 4 variants automatically
+- Handles pointer types like `char*` correctly
+- Generates namespaced enum constants to avoid conflicts
+- Zero runtime overhead - compiles to optimal assembly
+- Seamless integration with pattern matching system

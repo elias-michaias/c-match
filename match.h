@@ -1055,4 +1055,151 @@ CreateOptionPtr(size_t, size_t_ptr)
     (is_ok(result_ptr) ? some_##option_type((result_ptr)->value) : \
                          none_##option_type())
 
+// ============================================================================
+// Tag Union Generator - All-in-one variadic approach
+// ============================================================================
+
+/*
+ * Tagged Union Generator - Complete one-macro solution
+ * 
+ * This provides a single macro to generate complete tagged union definitions
+ * including the struct typedef, enum constants, and constructor functions.
+ * 
+ * Usage:
+ *   tag_union(Either,
+ *       int, Number,
+ *       char*, Text
+ *   )
+ * 
+ * This generates:
+ *   - typedef struct { ... } Either;
+ *   - Enum constants: Either_Number = 1, Either_Text = 2
+ *   - Constructor functions: new_Either_Number(int), new_Either_Text(char*)
+ * 
+ * Example:
+ *   tag_union(Either,
+ *       int, Number,
+ *       char*, Text
+ *   )
+ * 
+ *   Either e1 = new_Either_Number(42);
+ *   Either e2 = new_Either_Text("hello");
+ * 
+ *   match(&e1) {
+ *       when(Either_Number) { printf("Number: %d\n", e1.Number); }
+ *       when(Either_Text) { printf("Text: %s\n", e1.Text); }
+ *   }
+ */
+
+// Main variadic tag_union macro using argument counting
+#define tag_union(union_name, ...) \
+    TAG_UNION_DISPATCH(TAG_UNION_COUNT(__VA_ARGS__), union_name, __VA_ARGS__)
+
+// Argument counting macro (counts pairs of type,name after union_name)
+#define TAG_UNION_COUNT(...) \
+    TAG_UNION_COUNT_IMPL(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+
+#define TAG_UNION_COUNT_IMPL(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, N, ...) N
+
+// Dispatch macro
+#define TAG_UNION_DISPATCH(N, union_name, ...) \
+    TAG_UNION_DISPATCH_(N, union_name, __VA_ARGS__)
+
+#define TAG_UNION_DISPATCH_(N, union_name, ...) \
+    TAG_UNION_##N(union_name, __VA_ARGS__)
+
+// Implementation for 2 variants (4 args after union_name)
+#define TAG_UNION_4(union_name, type1, name1, type2, name2) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    }
+
+// Implementation for 3 variants (6 args after union_name)
+#define TAG_UNION_6(union_name, type1, name1, type2, name2, type3, name3) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    }
+
+// Implementation for 4 variants (8 args after union_name)
+#define TAG_UNION_8(union_name, type1, name1, type2, name2, type3, name3, type4, name4) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    }
+
+// Helper functions for tagged unions
+#define tag_union_tag(ptr) ((ptr)->tag)
+#define tag_union_is(ptr, variant) (tag_union_tag(ptr) == variant)
+
 #endif // MATCH_H
