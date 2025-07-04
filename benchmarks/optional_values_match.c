@@ -45,10 +45,10 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Option_int result = find_in_array_match(test_array, 10, i % 20);
         match(&result) {
-            when(Some) {
-                found_count += result.value;
+            when(Option_Some) {
+                found_count += result.Some;
             }
-            when(None) {
+            when(Option_None) {
                 // Not found - do nothing
             }
         }
@@ -59,10 +59,10 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Option_char_ptr result = get_config_match(config_keys[i % 4]);
         match(&result) {
-            when(Some) {
-                config_count += strlen(result.value);
+            when(Option_Some) {
+                config_count += strlen(result.Some);
             }
-            when(None) {
+            when(Option_None) {
                 // Not found - do nothing
             }
         }

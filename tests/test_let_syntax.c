@@ -61,8 +61,8 @@ int main() {
     Option_int opt = some_int(42);
     
     char* opt_result = match_expr(&opt) in(
-        is(Some) ? "has value"
-        : is(None) ? "no value"
+        is(Option_Some) ? "has value"
+        : is(Option_None) ? "no value"
         : "unknown"
     );
     
@@ -72,8 +72,8 @@ int main() {
     // Test 5: Result matching
     Result_int res = ok_int(123);
     int res_value = let(&res) in(
-        is(Ok) ? res.value
-        : is(Err) ? -1
+        is(Result_Ok) ? res.Ok
+        : is(Result_Err) ? -1
         : 0
     );
     
@@ -88,10 +88,10 @@ int main() {
     Result_char_ptr res_third = ok_char_ptr("success");
     
     match(&opt_first, &opt_second, &res_third) {
-        when(Some, Some, Ok) {
-            int first_val = opt_first.value;
-            double second_val = opt_second.value;
-            char* third_val = res_third.value;
+        when(Option_Some, Option_Some, Result_Ok) {
+            int first_val = opt_first.Some;
+            double second_val = opt_second.Some;
+            char* third_val = res_third.Ok;
             
             printf("  First option: %d\n", first_val);
             printf("  Second option: %f\n", second_val);
@@ -103,16 +103,16 @@ int main() {
             
             printf("✓ Multiple destructuring with direct field access works perfectly!\n");
         }
-        when(None, __, __) {
+        when(Option_None, __, __) {
             printf("First option is None\n");
             assert(0 && "Should not reach here");
         }
-        when(__, None, __) {
+        when(__, Option_None, __) {
             printf("Second option is None\n");
             assert(0 && "Should not reach here");
         }
-        when(__, __, Err) {
-            printf("Third result is error: %s\n", res_third.error);
+        when(__, __, Result_Err) {
+            printf("Third result is error: %s\n", res_third.Err);
             assert(0 && "Should not reach here");
         }
         otherwise {
@@ -127,9 +127,9 @@ int main() {
     Result_float res_float = ok_float(3.14f);
     
     int combined_result = let(&opt_long, &res_float) in(
-        is(Some, Ok) ? (int)(opt_long.value + res_float.value)
-        : is(None, __) ? -1
-        : is(__, Err) ? -2
+        is(Option_Some, Result_Ok) ? (int)(opt_long.Some + res_float.Ok)
+        : is(Option_None, __) ? -1
+        : is(__, Result_Err) ? -2
         : -3
     );
     
@@ -143,12 +143,12 @@ int main() {
     Result_double res_err = err_double("calculation failed");
     
     match(&opt_ok, &res_err) {
-        when(Some, Ok) {
+        when(Option_Some, Result_Ok) {
             assert(0 && "Should not reach here");
         }
-        when(Some, Err) {
-            int ok_val = opt_ok.value;
-            char* err_msg = res_err.error;
+        when(Option_Some, Result_Err) {
+            int ok_val = opt_ok.Some;
+            char* err_msg = res_err.Err;
             
             printf("  Option value: %d\n", ok_val);
             printf("  Error message: %s\n", err_msg);
@@ -158,7 +158,7 @@ int main() {
             
             printf("✓ Mixed success/error destructuring works!\n");
         }
-        when(None, __) {
+        when(Option_None, __) {
             assert(0 && "Should not reach here");
         }
         otherwise {
@@ -176,9 +176,9 @@ int main() {
     Result_double_ptr res_ptr = ok_double_ptr(&value2);
     
     match(&opt_ptr, &res_ptr) {
-        when(Some, Ok) {
-            int* ptr1 = opt_ptr.value;
-            double* ptr2 = res_ptr.value;
+        when(Option_Some, Result_Ok) {
+            int* ptr1 = opt_ptr.Some;
+            double* ptr2 = res_ptr.Ok;
             
             printf("  Pointer 1 points to: %d\n", *ptr1);
             printf("  Pointer 2 points to: %f\n", *ptr2);
@@ -201,8 +201,8 @@ int main() {
     // Test 11: Final demonstration of clean syntax
     Option_int opt_let = some_int(888);
     int extracted_value = let(&opt_let) in(
-        is(Some) ? opt_let.value  // Clean new syntax!
-        : is(None) ? 0
+        is(Option_Some) ? opt_let.Some // Clean new syntax!
+        : is(Option_None) ? 0
         : -1
     );
     
@@ -211,9 +211,9 @@ int main() {
     
     // Show off the clean syntax in comments:
     printf("\nExamples of the new clean syntax:\n");
-    printf("  int result = let(&my_option) in(is(Some) ? my_option.value : 0);\n");
-    printf("  char* error = let(&my_result) in(is(Err) ? my_result.error : \"No error\");\n");
-    printf("  match(&opt1, &opt2) { when(Some, Some) { use opt1.value and opt2.value; } }\n");
+    printf("  int result = let(&my_option) in(is(Option_Some) ? my_option.Some : 0);\n");
+    printf("  char* error = let(&my_result) in(is(Result_Err) ? my_result.Err : \"No error\");\n");
+    printf("  match(&opt1, &opt2) { when(Option_Some, Option_Some) { use opt1.Some and opt2.Some; } }\n");
 
     printf("\n=== All 'let' Syntax Tests Passed! ===\n");
     printf("The 'let' syntax is much cleaner than 'match_expr'!\n");

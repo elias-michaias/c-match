@@ -73,11 +73,11 @@ int main() {
     
     Result_double res_div = safe_divide(10.0, 2.0);
     match(&res_div) {
-        when(Ok) {
-            assert(res_div.value == 5.0);
+        when(Result_Ok) {
+            assert(res_div.Ok == 5.0);
             printf("✓ Result_double works correctly\n");
         }
-        when(Err) {
+        when(Result_Err) {
             assert(0 && "Should not reach here");
         }
     }
@@ -87,33 +87,33 @@ int main() {
     
     Option_char_ptr opt_str = get_optional_string(1);
     match(&opt_str) {
-        when(Some) {
-            assert(strcmp(opt_str.value, "Hello, World!") == 0);
+        when(Option_Some) {
+            assert(strcmp(opt_str.Some, "Hello, World!") == 0);
             printf("✓ Option_char_ptr works correctly\n");
         }
-        when(None) {
+        when(Option_None) {
             assert(0 && "Should not reach here");
         }
     }
     
     Result_void_ptr res_buf = get_generic_buffer(1);
     match(&res_buf) {
-        when(Ok) {
-            assert(strcmp((char*)res_buf.value, "Generic data buffer") == 0);
+        when(Result_Ok) {
+            assert(strcmp((char*)res_buf.Ok, "Generic data buffer") == 0);
             printf("✓ Result_void_ptr works correctly\n");
         }
-        when(Err) {
+        when(Result_Err) {
             assert(0 && "Should not reach here");
         }
     }
     
     Option_int_ptr opt_int_ptr = get_optional_int_ptr(1);
     match(&opt_int_ptr) {
-        when(Some) {
-            assert(*(opt_int_ptr.value) == 999);
+        when(Option_Some) {
+            assert(*(opt_int_ptr.Some) == 999);
             printf("✓ Option_int_ptr works correctly\n");
         }
-        when(None) {
+        when(Option_None) {
             assert(0 && "Should not reach here");
         }
     }
@@ -123,13 +123,13 @@ int main() {
     
     Option_Point opt_point = create_optional_point(1);
     match(&opt_point) {
-        when(Some) {
-            Point p = opt_point.value;
+        when(Option_Some) {
+            Point p = opt_point.Some;
             assert(p.x == 100 && p.y == 200);
             assert(strcmp(p.label, "Origin") == 0);
             printf("✓ Option_Point works correctly\n");
         }
-        when(None) {
+        when(Option_None) {
             assert(0 && "Should not reach here");
         }
     }
@@ -139,21 +139,21 @@ int main() {
     
     Option_int opt_none = get_optional_int(0);
     match(&opt_none) {
-        when(Some) {
+        when(Option_Some) {
             assert(0 && "Should not reach here");
         }
-        when(None) {
+        when(Option_None) {
             printf("✓ Option_int None case works correctly\n");
         }
     }
     
     Result_double res_div_err = safe_divide(10.0, 0.0);
     match(&res_div_err) {
-        when(Ok) {
+        when(Result_Ok) {
             assert(0 && "Should not reach here");
         }
-        when(Err) {
-            assert(strcmp(res_div_err.error, "Division by zero") == 0);
+        when(Result_Err) {
+            assert(strcmp(res_div_err.Err, "Division by zero") == 0);
             printf("✓ Result_double error handling works correctly\n");
         }
     }

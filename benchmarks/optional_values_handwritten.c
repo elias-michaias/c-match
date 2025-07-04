@@ -48,8 +48,8 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Option_int result = find_in_array_handwritten(test_array, 10, i % 20);
         // Manual check instead of pattern matching
-        if (result.tag == Some) {
-            found_count += result.value;
+        if (result.tag == Option_Some) {
+            found_count += result.Some;
         }
         // Ignore None manually instead of using when(None)
     }
@@ -59,8 +59,8 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Option_char_ptr result = get_config_handwritten(config_keys[i % 4]);
         // Manual check instead of pattern matching
-        if (result.tag == Some) {
-            config_count += strlen(result.value);
+        if (result.tag == Option_Some) {
+            config_count += strlen(result.Some);
         }
         // Ignore None manually instead of using when(None)
     }

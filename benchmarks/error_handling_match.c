@@ -36,10 +36,10 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Result_double result = divide_match(100.0, (double)(i % 10));
         match(&result) {
-            when(Ok) {
-                div_result += result.value;
+            when(Result_Ok) {
+                div_result += result.Ok;
             }
-            when(Err) {
+            when(Result_Err) {
                 // Error case - do nothing
             }
         }
@@ -51,10 +51,10 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Result_int result = parse_int_match(test_strings[i % 4]);
         match(&result) {
-            when(Ok) {
-                parse_result += result.value;
+            when(Result_Ok) {
+                parse_result += result.Ok;
             }
-            when(Err) {
+            when(Result_Err) {
                 // Error case - do nothing
             }
         }

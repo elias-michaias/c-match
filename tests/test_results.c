@@ -55,11 +55,11 @@ void test_result_pattern_matching() {
         char* matched_error = NULL;
         
         match(&results[i]) {
-            when(Ok) {
-                matched_value = results[i].value;
+            when(Result_Ok) {
+                matched_value = results[i].Ok;
             }
-            when(Err) {
-                matched_error = results[i].error;
+            when(Result_Err) {
+                matched_error = results[i].Err;
             }
         }
         
@@ -81,15 +81,15 @@ void test_result_pattern_matching() {
     
     // Test expression form
     const char* classification = match_expr(&results[0]) in(
-        is(Ok) ? (results[0].value > 40 ? "large" : "small") :
-        is(Err) ? "error" :
+        is(Result_Ok) ? (results[0].Ok > 40 ? "large" : "small") :
+        is(Result_Err) ? "error" :
         "unknown"
     );
     assert(strcmp(classification, "large") == 0);
     
     classification = match_expr(&results[1]) in(
-        is(Ok) ? "success" :
-        is(Err) ? "error" :
+        is(Result_Ok) ? "success" :
+        is(Result_Err) ? "error" :
         "unknown"
     );
     assert(strcmp(classification, "error") == 0);
@@ -109,8 +109,8 @@ void test_custom_struct_results() {
     
     Point extracted_point = {0, 0};
     match(&point_result) {
-        when(Ok) {
-            extracted_point = point_result.value;
+        when(Result_Ok) {
+            extracted_point = point_result.Ok;
         }
         otherwise {
             assert(0); // Should not reach here
@@ -127,11 +127,11 @@ void test_custom_struct_results() {
     
     char* error_msg = NULL;
     match(&person_result) {
-        when(Ok) {
+        when(Result_Ok) {
             assert(0); // Should not reach here
         }
-        when(Err) {
-            error_msg = person_result.error;
+        when(Result_Err) {
+            error_msg = person_result.Err;
         }
     }
     assert(error_msg != NULL);
@@ -153,8 +153,8 @@ void test_pointer_results() {
     
     char* extracted_string = NULL;
     match(&string_result) {
-        when(Ok) {
-            extracted_string = string_result.value;
+        when(Result_Ok) {
+            extracted_string = string_result.Ok;
         }
         otherwise {
             assert(0);
@@ -193,20 +193,20 @@ void test_chained_operations() {
     // Simulate chaining: start -> double_if_positive -> add_ten
     Result_int step1 = {0};
     match(&start) {
-        when(Ok) {
-            step1 = double_if_positive(start.value);
+        when(Result_Ok) {
+            step1 = double_if_positive(start.Ok);
         }
-        when(Err) {
+        when(Result_Err) {
             step1 = err_int("Start failed");
         }
     }
     
     Result_int final_result = {0};
     match(&step1) {
-        when(Ok) {
-            final_result = add_ten(step1.value);
+        when(Result_Ok) {
+            final_result = add_ten(step1.Ok);
         }
-        when(Err) {
+        when(Result_Err) {
             final_result = step1; // Propagate error
         }
     }
@@ -214,8 +214,8 @@ void test_chained_operations() {
     assert(is_ok(&final_result));
     int final_value = 0;
     match(&final_result) {
-        when(Ok) {
-            final_value = final_result.value;
+        when(Result_Ok) {
+            final_value = final_result.Ok;
         }
     }
     assert(final_value == 20); // 5 * 2 + 10 = 20
@@ -224,10 +224,10 @@ void test_chained_operations() {
     Result_int negative_start = ok_int(-5);
     
     match(&negative_start) {
-        when(Ok) {
-            step1 = double_if_positive(negative_start.value);
+        when(Result_Ok) {
+            step1 = double_if_positive(negative_start.Ok);
         }
-        when(Err) {
+        when(Result_Err) {
             step1 = err_int("Start failed");
         }
     }
@@ -251,10 +251,10 @@ void test_expression_form_complex() {
     for (int i = 0; i < 4; i++) {
         // Complex expression using Results
         int computed = match_expr(&test_values[i]) in(
-            is(Ok) ? (test_values[i].value == 0 ? -1 :
-                              test_values[i].value > 50 ? test_values[i].value * 2 :
-                              test_values[i].value + 100) :
-            is(Err) ? -999 :
+            is(Result_Ok) ? (test_values[i].Ok == 0 ? -1 :
+                              test_values[i].Ok > 50 ? test_values[i].Ok * 2 :
+                              test_values[i].Ok + 100) :
+            is(Result_Err) ? -999 :
             -1000
         );
         

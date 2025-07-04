@@ -1,15 +1,15 @@
 # Pattern Matching System for C
 
-A low-to-no overhead pattern matching system for C that provides ergonomic syntax with compile-time optimization. Comes out of the box with Result types, Option types, and more goodies associated with pattern matching.
+A low-to-no overhead pattern matching system for C that provides ergonomic syntax with compile-time optimization. Comes out of the box with Result types, Option types, macros to generate custom tag unions, and more goodies associated with pattern matching.
 
 ## Features
 
 - **Type-agnostic matching** for up to 10 arguments
 - **Low runtime overhead** - compiles to optimal assembly, nearly identical to hand-written C in most cases
 - **Rich pattern support**: literals, wildcards, inequalities, ranges, tagged unions
-- **Direct field access** - Clean, zero-overhead value extraction with `.value` and `.error` fields
 - **Option types** - Full `Option<T>` system with `CreateOption(TYPE)` macro, `some_TYPE()`, `none_TYPE()`, helper functions, and seamless pattern matching
 - **Result types** - Full `Result<T, E>` system with `CreateResult(TYPE)` macro, `ok_TYPE()`, `err_TYPE()`, helper functions, and seamless pattern matching
+- **Tag unions** - Make your own powerful, matchable types - without the hassle
 - **Two forms**: Statement form `match() { when() ... }` and expression form `let() in( is() ? ... : ... )`
 - **Do blocks** for complex operations in expression form `is () ? do(...) : do(...)`
 - **Automatic type conversion** using `_Generic`
@@ -40,10 +40,10 @@ Option_int find_value(int *array, int size, int target) {
 int array[] = {1, 2, 3, 4, 5};
 Option_int result = find_value(array, 5, 3);
 match(&result) {
-    when(Some) {
-        printf("Found: %d\n", result.value);
+    when(Option_Some) {
+        printf("Found: %d\n", result.Some);
     }
-    when(None) {
+    when(Option_None) {
         printf("Not found\n");
     }
 }
@@ -58,11 +58,11 @@ Result_int divide(int a, int b) {
 
 Result_int result = divide(10, 2);
 match(&result) {
-    when(Ok) {
-        printf("Success: %d\n", result.value);
+    when(Result_Ok) {
+        printf("Success: %d\n", result.Ok);
     }
-    when(Err) {
-        printf("Error: %s\n", result.error);
+    when(Result_Err) {
+        printf("Error: %s\n", result.Err);
     }
 }
 
@@ -217,10 +217,10 @@ int main() {
     Option_int result = find_first_positive(numbers, 6);
     
     match(&result) {
-        when(Some) {
-            printf("First positive number: %d\n", result.value);
+        when(Option_Some) {
+            printf("First positive number: %d\n", result.Some);
         }
-        when(None) {
+        when(Option_None) {
             printf("No positive numbers found\n");
         }
     }
@@ -250,11 +250,11 @@ int main() {
     Result_int result = safe_divide(10, 2);
     
     match(&result) {
-        when(Ok) {
-            printf("Result: %d\n", result.value);
+        when(Result_Ok) {
+            printf("Result: %d\n", result.Ok);
         }
-        when(Err) {
-            printf("Error: %s\n", result.error);
+        when(Result_Err) {
+            printf("Error: %s\n", result.Err);
         }
     }
     
@@ -358,10 +358,10 @@ int main() {
     
     // Pattern matching with Options
     match(&result) {
-        when(Some) {
-            printf("Found: %d\n", result.value);
+        when(Option_Some) {
+            printf("Found: %d\n", result.Some);
         }
-        when(None) {
+        when(Option_None) {
             printf("Not found\n");
         }
     }
@@ -439,10 +439,10 @@ Option_int results[] = {
 
 for (int i = 0; i < 3; i++) {
     match(&results[i]) {
-        when(Some) {
-            printf("Found: %d\n", results[i].value);
+        when(Option_Some) {
+            printf("Found: %d\n", results[i].Some);
         }
-        when(None) {
+        when(Option_None) {
             printf("Not found\n");
         }
     }
@@ -482,12 +482,12 @@ void handle_file_operation(const char* filename) {
     Option_char_ptr file_result = read_file(filename);
     
     match(&file_result) {
-        when(Some) {
-            char* content = file_result.value;
+        when(Option_Some) {
+            char* content = file_result.Some;
             printf("File content: %s\n", content);
             free(content);
         }
-        when(None) {
+        when(Option_None) {
             printf("File not found: %s\n", filename);
         }
     }
@@ -574,11 +574,11 @@ int main() {
     
     // Pattern matching with Results
     match(&result) {
-        when(Ok) {
-            printf("Success: %d\n", result.value);
+        when(Result_Ok) {
+            printf("Success: %d\n", result.Ok);
         }
-        when(Err) {
-            printf("Error: %s\n", result.error);
+        when(Result_Err) {
+            printf("Error: %s\n", result.Err);
         }
     }
     
@@ -660,12 +660,12 @@ Result_int results[] = {
 
 for (int i = 0; i < 3; i++) {
     match(&results[i]) {
-        when(Ok) {
-            int value = results[i].value;
+        when(Result_Ok) {
+            int value = results[i].Ok;
             printf("Success: %d\n", value);
         }
-        when(Err) {
-            char* error = results[i].error;
+        when(Result_Err) {
+            char* error = results[i].Err;
             printf("Error: %s\n", error);
         }
     }
@@ -705,13 +705,13 @@ void handle_file_operation(const char* filename) {
     Result_char_ptr file_result = read_file(filename);
     
     match(&file_result) {
-        when(Ok) {
-            char* content = file_result.value;
+        when(Result_Ok) {
+            char* content = file_result.Ok;
             printf("File content: %s\n", content);
             free(content);
         }
-        when(Err) {
-            char* error = file_result.error;
+        when(Result_Err) {
+            char* error = file_result.Err;
             match(strstr(error, "permission")) {
                 when(ne(NULL)) {
                     printf("Permission denied for %s\n", filename);
@@ -864,6 +864,66 @@ match(&value) {
     }
 }
 ```
+
+### Tagged Union Macro
+
+The `tag_union` macro provides a powerful way to generate tagged unions with a single declaration:
+
+```c
+#include "match.h"
+
+// Single macro call generates struct, enums, and constructors
+tag_union(Either, 
+    int, Number, 
+    char*, Text
+)
+
+// This generates:
+// - enum { Either_Number = 1, Either_Text = 2 }
+// - struct Either with tag field and union of Number/Text
+// - Constructor functions: new_Either_Number(), new_Either_Text()
+
+int main() {
+    // Create instances using generated constructors
+    Either e1 = new_Either_Number(42);
+    Either e2 = new_Either_Text("hello world");
+    
+    // Pattern matching with generated enum tags
+    match(&e1) {
+        when(Either_Number) {
+            printf("Number: %d\n", e1.Number);
+        }
+        when(Either_Text) {
+            printf("Text: %s\n", e1.Text);
+        }
+    }
+    
+    tag_union(Color, int, Red, int, Green, int, Blue)
+    tag_union(Shape, int, Circle, float, Square, char*, Triangle, double, Rectangle)
+    
+    Color c = new_Color_Red(255);
+    Shape s = new_Shape_Circle(10);
+    
+    match(&c) {
+        when(Color_Red) { printf("Red: %d\n", c.Red); }
+        when(Color_Green) { printf("Green: %d\n", c.Green); }
+        when(Color_Blue) { printf("Blue: %d\n", c.Blue); }
+    }
+    
+    return 0;
+}
+```
+
+The `tag_union` macro syntax is:
+```c
+tag_union(Name, type1, field1, type2, field2, ...)
+```
+
+This generates:
+- **Enum constants**: `Name_field1`, `Name_field2`, etc.
+- **Struct type**: `Name` with `tag` field and union of variant fields
+- **Constructor functions**: `new_Name_field1()`, `new_Name_field2()`, etc.
+- **Pattern matching support**: Use enum constants with `when()` and `is()`
 
 ### Real-World Example: Result Type
 
@@ -1058,7 +1118,7 @@ result = let(value1, value2, ...) in(
 - `variant(tag)` - Tagged union pattern (match by tag)
 
 ### Value Access Macros
-- **Direct field access** - Use `.value` for Option/Result values and `.error` for Result errors
+- **Direct field access** - Use `.Ok`, `.Err`, and `.Some` fields for clean value access
 - **Tagged union fields** - Access union fields directly (e.g., `value.int_val`, `value.string_val`)
 
 ### Utility Macros
@@ -1140,68 +1200,3 @@ match/
 ## License
 
 MIT License - see LICENSE file for details.
-
-### Tagged Union Macro
-
-The `tag_union` macro provides a powerful way to generate tagged unions with a single declaration:
-
-```c
-#include "match.h"
-
-// Single macro call generates struct, enums, and constructors
-tag_union(Either, int, Number, char*, Text)
-
-// This generates:
-// - enum { Either_Number = 1, Either_Text = 2 }
-// - struct Either with tag field and union of Number/Text
-// - Constructor functions: new_Either_Number(), new_Either_Text()
-
-int main() {
-    // Create instances using generated constructors
-    Either e1 = new_Either_Number(42);
-    Either e2 = new_Either_Text("hello world");
-    
-    // Pattern matching with generated enum tags
-    match(&e1) {
-        when(Either_Number) {
-            printf("Number: %d\n", e1.Number);
-        }
-        when(Either_Text) {
-            printf("Text: %s\n", e1.Text);
-        }
-    }
-    
-    // Works with 2, 3, or 4 variants
-    tag_union(Color, int, Red, int, Green, int, Blue)
-    tag_union(Shape, int, Circle, float, Square, char*, Triangle, double, Rectangle)
-    
-    Color c = new_Color_Red(255);
-    Shape s = new_Shape_Circle(10);
-    
-    match(&c) {
-        when(Color_Red) { printf("Red: %d\n", c.Red); }
-        when(Color_Green) { printf("Green: %d\n", c.Green); }
-        when(Color_Blue) { printf("Blue: %d\n", c.Blue); }
-    }
-    
-    return 0;
-}
-```
-
-The `tag_union` macro syntax is:
-```c
-tag_union(Name, type1, field1, type2, field2, ...)
-```
-
-This generates:
-- **Enum constants**: `Name_field1`, `Name_field2`, etc.
-- **Struct type**: `Name` with `tag` field and union of variant fields
-- **Constructor functions**: `new_Name_field1()`, `new_Name_field2()`, etc.
-- **Pattern matching support**: Use enum constants with `when()` and `is()`
-
-**Features:**
-- Supports 2, 3, or 4 variants automatically
-- Handles pointer types like `char*` correctly
-- Generates namespaced enum constants to avoid conflicts
-- Zero runtime overhead - compiles to optimal assembly
-- Seamless integration with pattern matching system

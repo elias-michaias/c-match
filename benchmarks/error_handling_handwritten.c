@@ -42,8 +42,8 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Result_double result = divide_handwritten(100.0, (double)(i % 10));
         // Manual check instead of pattern matching
-        if (result.tag == Ok) {
-            div_result += result.value;
+        if (result.tag == Result_Ok) {
+            div_result += result.Ok;
         }
         // Ignore errors manually instead of using when(Err)
     }
@@ -54,8 +54,8 @@ int main() {
     for (int i = 0; i < ITERATIONS; i++) {
         Result_int result = parse_int_handwritten(test_strings[i % 4]);
         // Manual check instead of pattern matching
-        if (result.tag == Ok) {
-            parse_result += result.value;
+        if (result.tag == Result_Ok) {
+            parse_result += result.Ok;
         }
         // Ignore errors manually instead of using when(Err)
     }

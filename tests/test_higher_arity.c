@@ -26,18 +26,18 @@ int main() {
     int test1_matched = 0;
     
     match(&opt1, &opt2, &opt3) {
-        when(Some, Some, Some) {
+        when(Option_Some, Option_Some, Option_Some) {
             printf("  All Some - should not match\n");
             assert(0 && "Should not reach here");
         }
-        when(Some, None, Some) {
+        when(Option_Some, Option_None, Option_Some) {
             printf("  Pattern: Some, None, Some - MATCHED!\n");
-            printf("  Values: %d, None, %d\n", opt1.value, opt3.value);
-            assert(opt1.value == 10);
-            assert(opt3.value == 30);
+            printf("  Values: %d, None, %d\n", opt1.Some, opt3.Some);
+            assert(opt1.Some == 10);
+            assert(opt3.Some == 30);
             test1_matched = 1;
         }
-        when(None, __, __) {
+        when(Option_None, __, __) {
             printf("  First is None - should not match\n");
             assert(0 && "Should not reach here");
         }
@@ -53,9 +53,9 @@ int main() {
     printf("Test 2: 3-argument expression form (let/is)...\n");
     
     char* test2_result = let(&opt1, &opt2, &opt3) in(
-        is(Some, Some, Some) ? "all-some"
-        : is(Some, None, Some) ? "some-none-some"
-        : is(None, __, __) ? "first-none"
+        is(Option_Some, Option_Some, Option_Some) ? "all-some"
+        : is(Option_Some, Option_None, Option_Some) ? "some-none-some"
+        : is(Option_None, __, __) ? "first-none"
         : "no-match"
     );
     
@@ -70,17 +70,17 @@ int main() {
     int test3_matched = 0;
     
     match(literal1, &res1, literal2, &res2) {
-        when(42, Ok, 100, Ok) {
+        when(42, Result_Ok, 100, Result_Ok) {
             printf("  Pattern: 42, Ok, 100, Ok - should not match\n");
             assert(0 && "Should not reach here");
         }
-        when(42, Ok, 100, Err) {
+        when(42, Result_Ok, 100, Result_Err) {
             printf("  Pattern: 42, Ok, 100, Err - MATCHED!\n");
-            printf("  Values: %d, %f, %d, %s\n", literal1, res1.value, literal2, res2.error);
+            printf("  Values: %d, %f, %d, %s\n", literal1, res1.Ok, literal2, res2.Err);
             assert(literal1 == 42);
-            assert(res1.value == 1.5);
+            assert(res1.Ok == 1.5);
             assert(literal2 == 100);
-            assert(strcmp(res2.error, "error") == 0);
+            assert(strcmp(res2.Err, "error") == 0);
             test3_matched = 1;
         }
         when(__, __, __, __) {
@@ -99,8 +99,8 @@ int main() {
     printf("Test 4: 4-argument mixed expression form...\n");
     
     int test4_result = let(literal1, &res1, literal2, &res2) in(
-        is(42, Ok, 100, Ok) ? 1
-        : is(42, Ok, 100, Err) ? 2
+        is(42, Result_Ok, 100, Result_Ok) ? 1
+        : is(42, Result_Ok, 100, Result_Err) ? 2
         : is(gt(40), __, ge(50), __) ? 3
         : 0
     );
@@ -115,17 +115,17 @@ int main() {
     int test5_matched = 0;
     
     match(&opt1, &opt2, &res1, &res3, status) {
-        when(Some, Some, Ok, Ok, 'A') {
+        when(Option_Some, Option_Some, Result_Ok, Result_Ok, 'A') {
             printf("  All success with A - should not match\n");
             assert(0 && "Should not reach here");
         }
-        when(Some, None, Ok, Ok, 'A') {
+        when(Option_Some, Option_None, Result_Ok, Result_Ok, 'A') {
             printf("  Pattern: Some, None, Ok, Ok, 'A' - MATCHED!\n");
             printf("  Values: %d, None, %f, %s, %c\n", 
-                   opt1.value, res1.value, res3.value, status);
-            assert(opt1.value == 10);
-            assert(res1.value == 1.5);
-            assert(strcmp(res3.value, "hello") == 0);
+                   opt1.Some, res1.Ok, res3.Ok, status);
+            assert(opt1.Some == 10);
+            assert(res1.Ok == 1.5);
+            assert(strcmp(res3.Ok, "hello") == 0);
             assert(status == 'A');
             test5_matched = 1;
         }
@@ -145,10 +145,10 @@ int main() {
     printf("Test 6: 5-argument complex expression form...\n");
     
     double test6_result = let(&opt1, &opt2, &res1, &res3, status) in(
-        is(Some, Some, Ok, Ok, 'A') ? 1.0
-        : is(Some, None, Ok, Ok, 'A') ? 2.5
-        : is(None, __, __, __, __) ? 3.0
-        : is(__, __, Err, __, __) ? 4.0
+        is(Option_Some, Option_Some, Result_Ok, Result_Ok, 'A') ? 1.0
+        : is(Option_Some, Option_None, Result_Ok, Result_Ok, 'A') ? 2.5
+        : is(Option_None, __, __, __, __) ? 3.0
+        : is(__, __, Result_Err, __, __) ? 4.0
         : 0.0
     );
     
@@ -163,20 +163,20 @@ int main() {
     int test7_matched = 0;
     
     match(num1, num2, num3, &opt_f, &res1, &res2) {
-        when(between(10, 20), between(20, 30), between(30, 40), Some, Ok, Ok) {
+        when(between(10, 20), between(20, 30), between(30, 40), Option_Some, Result_Ok, Result_Ok) {
             printf("  All ranges and Some+Ok+Ok - should not match\n");
             assert(0 && "Should not reach here");
         }
-        when(between(10, 20), between(20, 30), between(30, 40), Some, Ok, Err) {
+        when(between(10, 20), between(20, 30), between(30, 40), Option_Some, Result_Ok, Result_Err) {
             printf("  Pattern: ranges + Some + Ok + Err - MATCHED!\n");
             printf("  Values: %d, %d, %d, %f, %f, %s\n", 
-                   num1, num2, num3, opt_f.value, res1.value, res2.error);
+                   num1, num2, num3, opt_f.Some, res1.Ok, res2.Err);
             assert(num1 == 15 && num1 >= 10 && num1 <= 20);
             assert(num2 == 25 && num2 >= 20 && num2 <= 30);
             assert(num3 == 35 && num3 >= 30 && num3 <= 40);
-            assert(opt_f.value == 3.14f);
-            assert(res1.value == 1.5);
-            assert(strcmp(res2.error, "error") == 0);
+            assert(opt_f.Some == 3.14f);
+            assert(res1.Ok == 1.5);
+            assert(strcmp(res2.Err, "error") == 0);
             test7_matched = 1;
         }
         otherwise {
@@ -193,7 +193,7 @@ int main() {
     char* test8_result = let(num1, num2, num3, &opt_f, &res1, &res2) in(
         is(gt(20), __, __, __, __, __) ? "first-gt-20"
         : is(between(10, 20), gt(30), __, __, __, __) ? "first-range-second-gt-30"
-        : is(between(10, 20), between(20, 30), between(30, 40), Some, Ok, Err) ? "full-match"
+        : is(between(10, 20), between(20, 30), between(30, 40), Option_Some, Result_Ok, Result_Err) ? "full-match"
         : "no-match"
     );
     
@@ -219,12 +219,12 @@ int main() {
     int test10_matched = 0;
     
     match(&big_opt, &big_res, num1, num2) {
-        when(Some, Ok, between(10, 20), between(20, 30)) {
+        when(Option_Some, Result_Ok, between(10, 20), between(20, 30)) {
             printf("  Complex nested match - MATCHED!\n");
             printf("  Values: %d, %d, %d, %d\n", 
-                   big_opt.value, big_res.value, num1, num2);
-            assert(big_opt.value == 1000);
-            assert(big_res.value == 2000);
+                   big_opt.Some, big_res.Ok, num1, num2);
+            assert(big_opt.Some == 1000);
+            assert(big_res.Ok == 2000);
             assert(num1 == 15);
             assert(num2 == 25);
             test10_matched = 1;

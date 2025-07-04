@@ -120,11 +120,11 @@ int main() {
     printf("result1 (Number * 2) = %d\n", result1);
     printf("result2 (Text length) = %d\n", result2);
     
-    // Test helper macros
-    printf("\nTest 5: Helper macros\n");
-    printf("tag_union_tag(&e1) = %u\n", tag_union_tag(&e1));
-    printf("tag_union_is(&e1, Either_Number) = %d\n", tag_union_is(&e1, Either_Number));
-    printf("tag_union_is(&e1, Either_Text) = %d\n", tag_union_is(&e1, Either_Text));
+    // Test direct tag access
+    printf("\nTest 5: Direct tag access\n");
+    printf("e1.tag = %u\n", e1.tag);
+    printf("e1.tag == Either_Number = %d\n", e1.tag == Either_Number);
+    printf("e1.tag == Either_Text = %d\n", e1.tag == Either_Text);
     
     // Test that we can use different field names with different types
     Value v1 = new_Value_IntData(123);  // This should work - using the first constructor

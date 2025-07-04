@@ -62,12 +62,12 @@ int main() {
     int matched_some = 0;
     int extracted_value = 0;
     match(&some_val) {
-        when(Some) {
-            extracted_value = some_val.value;
+        when(Option_Some) {
+            extracted_value = some_val.Some;
             printf("✓ Matched Some automatically: %d\n", extracted_value);
             matched_some = 1;
         }
-        when(None) {
+        when(Option_None) {
             printf("✗ Should not match None\n");
         }
         otherwise {
@@ -79,10 +79,10 @@ int main() {
     
     int matched_none = 0;
     match(&none_val) {
-        when(Some) {
+        when(Option_Some) {
             printf("✗ Should not match Some\n");
         }
-        when(None) {
+        when(Option_None) {
             printf("✓ Matched None automatically\n");
             matched_none = 1;
         }
@@ -96,16 +96,16 @@ int main() {
     printf("\nTest 3: Expression form with Options\n");
     
     const char* result_type = match_expr(&some_val) in(
-        is(Some) ? "has_value" :
-        is(None) ? "no_value" :
+        is(Option_Some) ? "has_value" :
+        is(Option_None) ? "no_value" :
         "unknown"
     );
     assert(strcmp(result_type, "has_value") == 0);
     printf("✓ Expression form with Some works\n");
     
     const char* result_type_none = match_expr(&none_val) in(
-        is(Some) ? "has_value" :
-        is(None) ? "no_value" :
+        is(Option_Some) ? "has_value" :
+        is(Option_None) ? "no_value" :
         "unknown"
     );
     assert(strcmp(result_type_none, "no_value") == 0);
@@ -118,21 +118,21 @@ int main() {
     Option_Point point_none = find_point(0);
     
     match(&point_some) {
-        when(Some) {
-            Point p = point_some.value;
+        when(Option_Some) {
+            Point p = point_some.Some;
             printf("✓ Found point: (%d, %d)\n", p.x, p.y);
             assert(p.x == 10 && p.y == 20);
         }
-        when(None) {
+        when(Option_None) {
             printf("✗ Should not match None\n");
         }
     }
     
     match(&point_none) {
-        when(Some) {
+        when(Option_Some) {
             printf("✗ Should not match Some\n");
         }
-        when(None) {
+        when(Option_None) {
             printf("✓ Point not found (None)\n");
         }
     }
@@ -144,58 +144,58 @@ int main() {
     Option_char_ptr name_none = get_name(999);
     
     printf("name_some.tag = %u\n", name_some.tag);
-    if (name_some.tag == Some) {
-        printf("name_some.value = %p (\"%s\")\n", (void*)name_some.value, name_some.value);
+    if (name_some.tag == Option_Some) {
+        printf("name_some.Some = %p (\"%s\")\n", (void*)name_some.Some, name_some.Some);
     }
     printf("name_none.tag = %u\n", name_none.tag);
     
     printf("Testing manual variant matching for pointers:\n");
     match(&name_some) {
-        when(Some) {
-            char* extracted_name = name_some.value;
+        when(Option_Some) {
+            char* extracted_name = name_some.Some;
             printf("✓ Manual variant: Found name: %s\n", extracted_name);
             if (extracted_name != NULL) {
                 assert(strcmp(extracted_name, "Alice") == 0);
             }
         }
-        when(None) {
+        when(Option_None) {
             printf("✗ Should not match None\n");
         }
     }
     
     printf("Testing auto-variant matching for pointers:\n");
     match(&name_some) {
-        when(Some) {
-            char* extracted_name = name_some.value;
+        when(Option_Some) {
+            char* extracted_name = name_some.Some;
             printf("✓ Auto-variant: Found name: %s\n", extracted_name);
             if (extracted_name != NULL) {
                 assert(strcmp(extracted_name, "Alice") == 0);
             }
         }
-        when(None) {
+        when(Option_None) {
             printf("✗ Should not match None\n");
         }
     }
     
     printf("Testing auto-variant matching for pointers:\n");
     match(&name_some) {
-        when(Some) {
-            char* extracted_name = name_some.value;
+        when(Option_Some) {
+            char* extracted_name = name_some.Some;
             printf("✓ Auto-variant: Found name: %s\n", extracted_name);
             if (extracted_name != NULL) {
                 assert(strcmp(extracted_name, "Alice") == 0);
             }
         }
-        when(None) {
+        when(Option_None) {
             printf("✗ Should not match None\n");
         }
     }
     
     match(&name_none) {
-        when(Some) {
+        when(Option_Some) {
             printf("✗ Should not match Some\n");
         }
-        when(None) {
+        when(Option_None) {
             printf("✓ Name not found (None)\n");
         }
     }
@@ -219,32 +219,32 @@ int main() {
     Option_int opt3 = none_int();
     
     match(&opt1, &opt2) {
-        when(Some, Some) {
+        when(Option_Some, Option_Some) {
             // Extract values separately due to thread-local storage limitation
             printf("✓ Both options have values\n");
         }
-        when(Some, None) {
+        when(Option_Some, Option_None) {
             printf("✗ Should not match Some, None\n");
         }
-        when(None, Some) {
+        when(Option_None, Option_Some) {
             printf("✗ Should not match None, Some\n");
         }
-        when(None, None) {
+        when(Option_None, Option_None) {
             printf("✗ Should not match None, None\n");
         }
     }
     
     match(&opt1, &opt3) {
-        when(Some, Some) {
-            printf("✗ Should not match Some, Some\n");
+        when(Option_Some, Option_Some) {
+            printf("✗ Should not match Option_Some, Option_Some\n");
         }
-        when(Some, None) {
+        when(Option_Some, Option_None) {
             printf("✓ Mixed options: Some, None\n");
         }
-        when(None, Some) {
+        when(Option_None, Option_Some) {
             printf("✗ Should not match None, Some\n");
         }
-        when(None, None) {
+        when(Option_None, Option_None) {
             printf("✗ Should not match None, None\n");
         }
     }
@@ -255,13 +255,13 @@ int main() {
     // Simple manual test of option chaining concept
     Option_int doubled;
     if (is_some(&some_val)) {
-        doubled = some_int(some_val.value * 2);
+        doubled = some_int(some_val.Some * 2);
     } else {
         doubled = none_int();
     }
     
     if (is_some(&doubled)) {
-        printf("✓ Option mapping concept works: %d -> %d\n", 42, doubled.value);
+        printf("✓ Option mapping concept works: %d -> %d\n", 42, doubled.Some);
     } else {
         printf("✗ Option mapping failed\n");
     }
@@ -285,10 +285,10 @@ int main() {
     printf("\nTest 10: Expression form with complex logic\n");
     
     int complex_result = match_expr(&opt1, &opt2, &opt3) in(
-        is(Some, Some, Some) ? 300 :
-        is(Some, Some, None) ? 200 :
-        is(Some, None, None) ? 100 :
-        is(None, None, None) ? 0 :
+        is(Option_Some, Option_Some, Option_Some) ? 300 :
+        is(Option_Some, Option_Some, Option_None) ? 200 :
+        is(Option_Some, Option_None, Option_None) ? 100 :
+        is(Option_None, Option_None, Option_None) ? 0 :
         -1
     );
     assert(complex_result == 200);

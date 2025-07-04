@@ -170,8 +170,8 @@
 
 // Common result tags
 typedef enum {
-    Ok = 1,
-    Err = 2
+    Result_Ok = 1,
+    Result_Err = 2
 } ResultTag;
 
 // ============================================================================
@@ -183,17 +183,17 @@ typedef enum {
         uint32_t tag; \
         uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
-            TYPE value; \
-            char* error; \
+            TYPE Ok; \
+            char* Err; \
         }; \
     } Result_##TYPE; \
     \
     static inline Result_##TYPE ok_##TYPE(TYPE val) { \
-        return (Result_##TYPE){Ok, 0, .value = val}; \
+        return (Result_##TYPE){Result_Ok, 0, .Ok = val}; \
     } \
     \
     static inline Result_##TYPE err_##TYPE(const char* msg) { \
-        return (Result_##TYPE){Err, 0, .error = (char*)msg}; \
+        return (Result_##TYPE){Result_Err, 0, .Err = (char*)msg}; \
     }
 
 // ============================================================================
@@ -205,17 +205,17 @@ typedef enum {
         uint32_t tag; \
         uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
-            TYPE* value; \
-            char* error; \
+            TYPE* Ok; \
+            char* Err; \
         }; \
     } Result_##SUFFIX; \
     \
     static inline Result_##SUFFIX ok_##SUFFIX(TYPE* val) { \
-        return (Result_##SUFFIX){Ok, 0, .value = val}; \
+        return (Result_##SUFFIX){Result_Ok, 0, .Ok = val}; \
     } \
     \
     static inline Result_##SUFFIX err_##SUFFIX(const char* msg) { \
-        return (Result_##SUFFIX){Err, 0, .error = (char*)msg}; \
+        return (Result_##SUFFIX){Result_Err, 0, .Err = (char*)msg}; \
     }
 
 // ============================================================================
@@ -244,14 +244,14 @@ CreateResultPtr(size_t, size_t_ptr)
 // Generic helper macros for working with any Result type
 // ============================================================================
 
-#define is_ok(result_ptr) ((result_ptr)->tag == Ok)
-#define is_err(result_ptr) ((result_ptr)->tag == Err)
+#define is_ok(result_ptr) ((result_ptr)->tag == Result_Ok)
+#define is_err(result_ptr) ((result_ptr)->tag == Result_Err)
 
 #define unwrap_or(result_ptr, default_val) \
-    (is_ok(result_ptr) ? (result_ptr)->value : (default_val))
+    (is_ok(result_ptr) ? (result_ptr)->Ok : (default_val))
 
 #define unwrap_or_else(result_ptr, func) \
-    (is_ok(result_ptr) ? (result_ptr)->value : func((result_ptr)->error))
+    (is_ok(result_ptr) ? (result_ptr)->Ok : func((result_ptr)->Err))
 
 // ============================================================================
 // Error handling utilities
@@ -272,11 +272,11 @@ CreateResultPtr(size_t, size_t_ptr)
 // ============================================================================
 
 #define RESULT_MAP(result_ptr, func, result_type) \
-    (is_ok(result_ptr) ? ok_##result_type(func((result_ptr)->value)) : \
-                         err_##result_type((result_ptr)->error))
+    (is_ok(result_ptr) ? ok_##result_type(func((result_ptr)->Ok)) : \
+                         err_##result_type((result_ptr)->Err))
 
 #define RESULT_AND_THEN(result_ptr, func) \
-    (is_ok(result_ptr) ? func((result_ptr)->value) : *result_ptr)
+    (is_ok(result_ptr) ? func((result_ptr)->Ok) : *result_ptr)
 
 /*
  * Tagged Union Notes:
@@ -932,8 +932,8 @@ static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void
 
 // Common option tags
 typedef enum {
-    Some = 3,
-    None = 4
+    Option_Some = 1,
+    Option_None = 2
 } OptionTag;
 
 // ============================================================================
@@ -945,17 +945,17 @@ typedef enum {
         uint32_t tag; \
         uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
-            TYPE value; \
-            char _padding_union[1]; /* Ensures union is not empty when None */ \
+            TYPE Some; \
+            char _none; /* Placeholder for None variant */ \
         }; \
     } Option_##TYPE; \
     \
     static inline Option_##TYPE some_##TYPE(TYPE val) { \
-        return (Option_##TYPE){Some, 0, .value = val}; \
+        return (Option_##TYPE){Option_Some, 0, .Some = val}; \
     } \
     \
     static inline Option_##TYPE none_##TYPE(void) { \
-        return (Option_##TYPE){None, 0, ._padding_union = {0}}; \
+        return (Option_##TYPE){Option_None, 0, ._none = 0}; \
     }
 
 // ============================================================================
@@ -967,17 +967,17 @@ typedef enum {
         uint32_t tag; \
         uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
-            TYPE* value; \
-            char _padding_union[1]; /* Ensures union is not empty when None */ \
+            TYPE* Some; \
+            char _none; /* Placeholder for None variant */ \
         }; \
     } Option_##SUFFIX; \
     \
     static inline Option_##SUFFIX some_##SUFFIX(TYPE* val) { \
-        return (Option_##SUFFIX){Some, 0, .value = val}; \
+        return (Option_##SUFFIX){Option_Some, 0, .Some = val}; \
     } \
     \
     static inline Option_##SUFFIX none_##SUFFIX(void) { \
-        return (Option_##SUFFIX){None, 0, ._padding_union = {0}}; \
+        return (Option_##SUFFIX){Option_None, 0, ._none = 0}; \
     }
 
 // ============================================================================
@@ -1006,40 +1006,28 @@ CreateOptionPtr(size_t, size_t_ptr)
 // Generic helper macros for working with any Option type
 // ============================================================================
 
-#define is_some(option_ptr) ((option_ptr)->tag == Some)
-#define is_none(option_ptr) ((option_ptr)->tag == None)
+#define is_some(option_ptr) ((option_ptr)->tag == Option_Some)
+#define is_none(option_ptr) ((option_ptr)->tag == Option_None)
 
 #define unwrap_option_or(option_ptr, default_val) \
-    (is_some(option_ptr) ? (option_ptr)->value : (default_val))
+    (is_some(option_ptr) ? (option_ptr)->Some : (default_val))
 
 #define unwrap_option_or_else(option_ptr, func) \
-    (is_some(option_ptr) ? (option_ptr)->value : func())
+    (is_some(option_ptr) ? (option_ptr)->Some : func())
 
 // ============================================================================
-// Option utilities
-// ============================================================================
-
-// Common default values
-#define DEFAULT_INT 0
-#define DEFAULT_FLOAT 0.0f
-#define DEFAULT_DOUBLE 0.0
-#define DEFAULT_LONG 0L
-#define DEFAULT_SIZE_T 0UL
-
-// ============================================================================
-// Option chaining operations (monadic-style)
+// Chaining operations for Options
 // ============================================================================
 
 #define OPTION_MAP(option_ptr, func, option_type) \
-    (is_some(option_ptr) ? some_##option_type(func((option_ptr)->value)) : \
-                           none_##option_type())
+    (is_some(option_ptr) ? some_##option_type(func((option_ptr)->Some)) : none_##option_type())
 
 #define OPTION_AND_THEN(option_ptr, func) \
-    (is_some(option_ptr) ? func((option_ptr)->value) : *option_ptr)
+    (is_some(option_ptr) ? func((option_ptr)->Some) : *option_ptr)
 
 #define OPTION_FILTER(option_ptr, predicate) \
-    (is_some(option_ptr) && predicate((option_ptr)->value) ? *option_ptr : \
-     (typeof(*option_ptr)){None, 0, ._padding_union = {0}})
+    (is_some(option_ptr) && predicate((option_ptr)->Some) ? *option_ptr : \
+     (typeof(*option_ptr)){Option_None, 0, ._none = 0})
 
 // ============================================================================
 // Option conversion utilities
@@ -1047,12 +1035,12 @@ CreateOptionPtr(size_t, size_t_ptr)
 
 // Convert Option to Result
 #define OPTION_TO_RESULT(option_ptr, error_msg, result_type) \
-    (is_some(option_ptr) ? ok_##result_type((option_ptr)->value) : \
+    (is_some(option_ptr) ? ok_##result_type((option_ptr)->Some) : \
                            err_##result_type(error_msg))
 
 // Convert Result to Option (discards error information)
 #define RESULT_TO_OPTION(result_ptr, option_type) \
-    (is_ok(result_ptr) ? some_##option_type((result_ptr)->value) : \
+    (is_ok(result_ptr) ? some_##option_type((result_ptr)->Ok) : \
                          none_##option_type())
 
 // ============================================================================
@@ -1097,9 +1085,9 @@ CreateOptionPtr(size_t, size_t_ptr)
 
 // Argument counting macro (counts pairs of type,name after union_name)
 #define TAG_UNION_COUNT(...) \
-    TAG_UNION_COUNT_IMPL(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+    TAG_UNION_COUNT_IMPL(__VA_ARGS__, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
 
-#define TAG_UNION_COUNT_IMPL(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, N, ...) N
+#define TAG_UNION_COUNT_IMPL(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, N, ...) N
 
 // Dispatch macro
 #define TAG_UNION_DISPATCH(N, union_name, ...) \
@@ -1198,8 +1186,346 @@ CreateOptionPtr(size_t, size_t_ptr)
         return (union_name){union_name##_##name4, 0, .name4 = val}; \
     }
 
-// Helper functions for tagged unions
-#define tag_union_tag(ptr) ((ptr)->tag)
-#define tag_union_is(ptr, variant) (tag_union_tag(ptr) == variant)
+// Implementation for 5 variants (10 args after union_name)
+#define TAG_UNION_10(union_name, type1, name1, type2, name2, type3, name3, type4, name4, type5, name5) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4, \
+        union_name##_##name5 = 5 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+            type5 name5; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name5(type5 val) { \
+        return (union_name){union_name##_##name5, 0, .name5 = val}; \
+    }
+
+// Implementation for 6 variants (12 args after union_name)
+#define TAG_UNION_12(union_name, type1, name1, type2, name2, type3, name3, type4, name4, type5, name5, type6, name6) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4, \
+        union_name##_##name5 = 5, \
+        union_name##_##name6 = 6 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+            type5 name5; \
+            type6 name6; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name5(type5 val) { \
+        return (union_name){union_name##_##name5, 0, .name5 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name6(type6 val) { \
+        return (union_name){union_name##_##name6, 0, .name6 = val}; \
+    }
+
+// Implementation for 7 variants (14 args after union_name)
+#define TAG_UNION_14(union_name, type1, name1, type2, name2, type3, name3, type4, name4, type5, name5, type6, name6, type7, name7) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4, \
+        union_name##_##name5 = 5, \
+        union_name##_##name6 = 6, \
+        union_name##_##name7 = 7 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+            type5 name5; \
+            type6 name6; \
+            type7 name7; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name5(type5 val) { \
+        return (union_name){union_name##_##name5, 0, .name5 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name6(type6 val) { \
+        return (union_name){union_name##_##name6, 0, .name6 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name7(type7 val) { \
+        return (union_name){union_name##_##name7, 0, .name7 = val}; \
+    }
+
+// Implementation for 8 variants (16 args after union_name)
+#define TAG_UNION_16(union_name, type1, name1, type2, name2, type3, name3, type4, name4, type5, name5, type6, name6, type7, name7, type8, name8) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4, \
+        union_name##_##name5 = 5, \
+        union_name##_##name6 = 6, \
+        union_name##_##name7 = 7, \
+        union_name##_##name8 = 8 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+            type5 name5; \
+            type6 name6; \
+            type7 name7; \
+            type8 name8; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name5(type5 val) { \
+        return (union_name){union_name##_##name5, 0, .name5 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name6(type6 val) { \
+        return (union_name){union_name##_##name6, 0, .name6 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name7(type7 val) { \
+        return (union_name){union_name##_##name7, 0, .name7 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name8(type8 val) { \
+        return (union_name){union_name##_##name8, 0, .name8 = val}; \
+    }
+
+// Implementation for 9 variants (18 args after union_name)
+#define TAG_UNION_18(union_name, type1, name1, type2, name2, type3, name3, type4, name4, type5, name5, type6, name6, type7, name7, type8, name8, type9, name9) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4, \
+        union_name##_##name5 = 5, \
+        union_name##_##name6 = 6, \
+        union_name##_##name7 = 7, \
+        union_name##_##name8 = 8, \
+        union_name##_##name9 = 9 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+            type5 name5; \
+            type6 name6; \
+            type7 name7; \
+            type8 name8; \
+            type9 name9; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name5(type5 val) { \
+        return (union_name){union_name##_##name5, 0, .name5 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name6(type6 val) { \
+        return (union_name){union_name##_##name6, 0, .name6 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name7(type7 val) { \
+        return (union_name){union_name##_##name7, 0, .name7 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name8(type8 val) { \
+        return (union_name){union_name##_##name8, 0, .name8 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name9(type9 val) { \
+        return (union_name){union_name##_##name9, 0, .name9 = val}; \
+    }
+
+// Implementation for 10 variants (20 args after union_name)
+#define TAG_UNION_20(union_name, type1, name1, type2, name2, type3, name3, type4, name4, type5, name5, type6, name6, type7, name7, type8, name8, type9, name9, type10, name10) \
+    enum { \
+        union_name##_##name1 = 1, \
+        union_name##_##name2 = 2, \
+        union_name##_##name3 = 3, \
+        union_name##_##name4 = 4, \
+        union_name##_##name5 = 5, \
+        union_name##_##name6 = 6, \
+        union_name##_##name7 = 7, \
+        union_name##_##name8 = 8, \
+        union_name##_##name9 = 9, \
+        union_name##_##name10 = 10 \
+    }; \
+    \
+    typedef struct { \
+        uint32_t tag; \
+        uint32_t _padding; \
+        union { \
+            type1 name1; \
+            type2 name2; \
+            type3 name3; \
+            type4 name4; \
+            type5 name5; \
+            type6 name6; \
+            type7 name7; \
+            type8 name8; \
+            type9 name9; \
+            type10 name10; \
+        }; \
+    } union_name; \
+    \
+    static inline union_name new_##union_name##_##name1(type1 val) { \
+        return (union_name){union_name##_##name1, 0, .name1 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name2(type2 val) { \
+        return (union_name){union_name##_##name2, 0, .name2 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name3(type3 val) { \
+        return (union_name){union_name##_##name3, 0, .name3 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name4(type4 val) { \
+        return (union_name){union_name##_##name4, 0, .name4 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name5(type5 val) { \
+        return (union_name){union_name##_##name5, 0, .name5 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name6(type6 val) { \
+        return (union_name){union_name##_##name6, 0, .name6 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name7(type7 val) { \
+        return (union_name){union_name##_##name7, 0, .name7 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name8(type8 val) { \
+        return (union_name){union_name##_##name8, 0, .name8 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name9(type9 val) { \
+        return (union_name){union_name##_##name9, 0, .name9 = val}; \
+    } \
+    \
+    static inline union_name new_##union_name##_##name10(type10 val) { \
+        return (union_name){union_name##_##name10, 0, .name10 = val}; \
+    }
 
 #endif // MATCH_H

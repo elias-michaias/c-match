@@ -18,8 +18,8 @@ int main() {
     printf("VARIANT_UNION_OFFSET = %d\n", VARIANT_UNION_OFFSET);
     
     // Direct field access
-    printf("res_ok.value = %f\n", res_ok.value);
-    printf("res_err.error = %s\n", res_err.error);
+    printf("res_ok.Ok = %f\n", res_ok.Ok);
+    printf("res_err.Err = %s\n", res_err.Err);
     
     // Pointer arithmetic access
     double* ok_ptr = (double*)((char*)&res_ok + VARIANT_UNION_OFFSET);
