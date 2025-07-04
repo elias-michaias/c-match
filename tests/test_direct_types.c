@@ -74,7 +74,7 @@ int main() {
     Result_double res_div = safe_divide(10.0, 2.0);
     match(&res_div) {
         when(Ok) {
-            assert(it(double) == 5.0);
+            assert(res_div.value == 5.0);
             printf("✓ Result_double works correctly\n");
         }
         when(Err) {
@@ -88,7 +88,7 @@ int main() {
     Option_char_ptr opt_str = get_optional_string(1);
     match(&opt_str) {
         when(Some) {
-            assert(strcmp(it(char*), "Hello, World!") == 0);
+            assert(strcmp(opt_str.value, "Hello, World!") == 0);
             printf("✓ Option_char_ptr works correctly\n");
         }
         when(None) {
@@ -99,7 +99,7 @@ int main() {
     Result_void_ptr res_buf = get_generic_buffer(1);
     match(&res_buf) {
         when(Ok) {
-            assert(strcmp((char*)it(void*), "Generic data buffer") == 0);
+            assert(strcmp((char*)res_buf.value, "Generic data buffer") == 0);
             printf("✓ Result_void_ptr works correctly\n");
         }
         when(Err) {
@@ -110,7 +110,7 @@ int main() {
     Option_int_ptr opt_int_ptr = get_optional_int_ptr(1);
     match(&opt_int_ptr) {
         when(Some) {
-            assert(*(it(int*)) == 999);
+            assert(*(opt_int_ptr.value) == 999);
             printf("✓ Option_int_ptr works correctly\n");
         }
         when(None) {
@@ -124,7 +124,7 @@ int main() {
     Option_Point opt_point = create_optional_point(1);
     match(&opt_point) {
         when(Some) {
-            Point p = it(Point);
+            Point p = opt_point.value;
             assert(p.x == 100 && p.y == 200);
             assert(strcmp(p.label, "Origin") == 0);
             printf("✓ Option_Point works correctly\n");
@@ -153,7 +153,7 @@ int main() {
             assert(0 && "Should not reach here");
         }
         when(Err) {
-            assert(strcmp(it(char*), "Division by zero") == 0);
+            assert(strcmp(res_div_err.error, "Division by zero") == 0);
             printf("✓ Result_double error handling works correctly\n");
         }
     }

@@ -217,7 +217,7 @@ void test_tagged_union_destructuring() {
     int result = 0;
     match(&int_val) {
         when(variant(TAG_INT)) {
-            result = it(int);
+            result = int_val.int_val;
         }
         otherwise {
             result = -1;
@@ -230,7 +230,7 @@ void test_tagged_union_destructuring() {
     float float_result = 0.0f;
     match(&float_val) {
         when(variant(TAG_FLOAT)) {
-            float_result = it(float);
+            float_result = float_val.float_val;
         }
         otherwise {
             float_result = -1.0f;
@@ -243,7 +243,7 @@ void test_tagged_union_destructuring() {
     char* string_result = NULL;
     match(&string_val) {
         when(variant(TAG_STRING)) {
-            string_result = it(char*);
+            string_result = string_val.string_val;
         }
         otherwise {
             string_result = NULL;
@@ -257,7 +257,7 @@ void test_tagged_union_destructuring() {
     int bool_result = 0;
     match(&bool_val) {
         when(variant(TAG_BOOL)) {
-            bool_result = it(int);
+            bool_result = bool_val.bool_val;
         }
         otherwise {
             bool_result = -1;
@@ -277,10 +277,10 @@ void test_tagged_union_destructuring() {
     
     // Test it() access in expression form
     int computed_result = match_expr(&int_val) in(
-        is(variant(TAG_INT)) ? it(int) * 2 :
-        is(variant(TAG_FLOAT)) ? (int)(it(float) * 10) :
-        is(variant(TAG_STRING)) ? (int)strlen(it(char*)) :
-        is(variant(TAG_BOOL)) ? (it(int) ? 1 : 0) :
+        is(variant(TAG_INT)) ? int_val.int_val * 2 :
+        is(variant(TAG_FLOAT)) ? (int)(int_val.float_val * 10) :
+        is(variant(TAG_STRING)) ? (int)strlen(int_val.string_val) :
+        is(variant(TAG_BOOL)) ? (int_val.bool_val ? 1 : 0) :
         -1
     );
     assert(computed_result == 84); // 42 * 2
@@ -288,10 +288,10 @@ void test_tagged_union_destructuring() {
     // Test with float in expression form
     TaggedValue float_val2 = {TAG_FLOAT, .float_val = 2.5f};
     computed_result = match_expr(&float_val2) in(
-        is(variant(TAG_INT)) ? it(int) * 2 :
-        is(variant(TAG_FLOAT)) ? (int)(it(float) * 10) :
-        is(variant(TAG_STRING)) ? (int)strlen(it(char*)) :
-        is(variant(TAG_BOOL)) ? (it(int) ? 1 : 0) :
+        is(variant(TAG_INT)) ? float_val2.int_val * 2 :
+        is(variant(TAG_FLOAT)) ? (int)(float_val2.float_val * 10) :
+        is(variant(TAG_STRING)) ? (int)strlen(float_val2.string_val) :
+        is(variant(TAG_BOOL)) ? (float_val2.bool_val ? 1 : 0) :
         -1
     );
     assert(computed_result == 25); // 2.5 * 10 = 25
@@ -299,10 +299,10 @@ void test_tagged_union_destructuring() {
     // Test with string in expression form
     TaggedValue string_val2 = {TAG_STRING, .string_val = "test"};
     computed_result = match_expr(&string_val2) in(
-        is(variant(TAG_INT)) ? it(int) * 2 :
-        is(variant(TAG_FLOAT)) ? (int)(it(float) * 10) :
-        is(variant(TAG_STRING)) ? (int)strlen(it(char*)) :
-        is(variant(TAG_BOOL)) ? (it(int) ? 1 : 0) :
+        is(variant(TAG_INT)) ? string_val2.int_val * 2 :
+        is(variant(TAG_FLOAT)) ? (int)(string_val2.float_val * 10) :
+        is(variant(TAG_STRING)) ? (int)strlen(string_val2.string_val) :
+        is(variant(TAG_BOOL)) ? (string_val2.bool_val ? 1 : 0) :
         -1
     );
     assert(computed_result == 4); // strlen("test") = 4
@@ -346,7 +346,7 @@ void test_nested_tagged_union_matching() {
         uint32_t tag;
         union {
             int value;
-            char* error_msg;
+            char* error;
         };
     } Result;
     
@@ -354,8 +354,8 @@ void test_nested_tagged_union_matching() {
     Result ok_result = {Ok, .value = 100};
     int category = 0;
     match(&ok_result) {
-        when(variant(Ok)) {
-            int val = it(int);
+        when(Ok) {
+            int val = ok_result.value;
             match(val) {
                 when(0) {
                     category = 1; // zero
@@ -368,21 +368,21 @@ void test_nested_tagged_union_matching() {
                 }
             }
         }
-        when(variant(Err)) {
+        when(Err) {
             category = -1; // error
         }
     }
     assert(category == 2); // large value
     
     // Test nested matching with Err variant
-    Result err_result = {Err, .error_msg = "Test error message"};
+    Result err_result = {Err, .error = "Test error message"};
     category = 0;
     match(&err_result) {
-        when(variant(Ok)) {
+        when(Ok) {
             category = 1; // success
         }
-        when(variant(Err)) {
-            char* msg = it(char*);
+        when(Err) {
+            char* msg = err_result.error;
             match(strlen(msg)) {
                 when(gt(15)) {
                     category = -2; // long error

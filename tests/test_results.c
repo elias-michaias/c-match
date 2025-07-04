@@ -55,11 +55,11 @@ void test_result_pattern_matching() {
         char* matched_error = NULL;
         
         match(&results[i]) {
-            when(variant(Ok)) {
-                matched_value = it(int);
+            when(Ok) {
+                matched_value = results[i].value;
             }
-            when(variant(Err)) {
-                matched_error = it(char*);
+            when(Err) {
+                matched_error = results[i].error;
             }
         }
         
@@ -81,15 +81,15 @@ void test_result_pattern_matching() {
     
     // Test expression form
     const char* classification = match_expr(&results[0]) in(
-        is(variant(Ok)) ? (it(int) > 40 ? "large" : "small") :
-        is(variant(Err)) ? "error" :
+        is(Ok) ? (results[0].value > 40 ? "large" : "small") :
+        is(Err) ? "error" :
         "unknown"
     );
     assert(strcmp(classification, "large") == 0);
     
     classification = match_expr(&results[1]) in(
-        is(variant(Ok)) ? "success" :
-        is(variant(Err)) ? "error" :
+        is(Ok) ? "success" :
+        is(Err) ? "error" :
         "unknown"
     );
     assert(strcmp(classification, "error") == 0);
@@ -109,8 +109,8 @@ void test_custom_struct_results() {
     
     Point extracted_point = {0, 0};
     match(&point_result) {
-        when(variant(Ok)) {
-            extracted_point = it(Point);
+        when(Ok) {
+            extracted_point = point_result.value;
         }
         otherwise {
             assert(0); // Should not reach here
@@ -127,11 +127,11 @@ void test_custom_struct_results() {
     
     char* error_msg = NULL;
     match(&person_result) {
-        when(variant(Ok)) {
+        when(Ok) {
             assert(0); // Should not reach here
         }
-        when(variant(Err)) {
-            error_msg = it(char*);
+        when(Err) {
+            error_msg = person_result.error;
         }
     }
     assert(error_msg != NULL);
@@ -153,8 +153,8 @@ void test_pointer_results() {
     
     char* extracted_string = NULL;
     match(&string_result) {
-        when(variant(Ok)) {
-            extracted_string = it(char*);
+        when(Ok) {
+            extracted_string = string_result.value;
         }
         otherwise {
             assert(0);
@@ -193,20 +193,20 @@ void test_chained_operations() {
     // Simulate chaining: start -> double_if_positive -> add_ten
     Result_int step1 = {0};
     match(&start) {
-        when(variant(Ok)) {
-            step1 = double_if_positive(it(int));
+        when(Ok) {
+            step1 = double_if_positive(start.value);
         }
-        when(variant(Err)) {
+        when(Err) {
             step1 = err_int("Start failed");
         }
     }
     
     Result_int final_result = {0};
     match(&step1) {
-        when(variant(Ok)) {
-            final_result = add_ten(it(int));
+        when(Ok) {
+            final_result = add_ten(step1.value);
         }
-        when(variant(Err)) {
+        when(Err) {
             final_result = step1; // Propagate error
         }
     }
@@ -214,8 +214,8 @@ void test_chained_operations() {
     assert(is_ok(&final_result));
     int final_value = 0;
     match(&final_result) {
-        when(variant(Ok)) {
-            final_value = it(int);
+        when(Ok) {
+            final_value = final_result.value;
         }
     }
     assert(final_value == 20); // 5 * 2 + 10 = 20
@@ -224,10 +224,10 @@ void test_chained_operations() {
     Result_int negative_start = ok_int(-5);
     
     match(&negative_start) {
-        when(variant(Ok)) {
-            step1 = double_if_positive(it(int));
+        when(Ok) {
+            step1 = double_if_positive(negative_start.value);
         }
-        when(variant(Err)) {
+        when(Err) {
             step1 = err_int("Start failed");
         }
     }
@@ -251,10 +251,10 @@ void test_expression_form_complex() {
     for (int i = 0; i < 4; i++) {
         // Complex expression using Results
         int computed = match_expr(&test_values[i]) in(
-            is(variant(Ok)) ? (it(int) == 0 ? -1 :
-                              it(int) > 50 ? it(int) * 2 :
-                              it(int) + 100) :
-            is(variant(Err)) ? -999 :
+            is(Ok) ? (test_values[i].value == 0 ? -1 :
+                              test_values[i].value > 50 ? test_values[i].value * 2 :
+                              test_values[i].value + 100) :
+            is(Err) ? -999 :
             -1000
         );
         

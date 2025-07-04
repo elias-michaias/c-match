@@ -46,12 +46,10 @@ demo: $(BUILD_DIR)/test_basic.exe $(BUILD_DIR)/test_results.exe
 clean:
 	rm -rf $(BUILD_DIR)
 
-# Performance test with optimization
+# Performance benchmark comparing hand-written C vs pattern matching
 benchmark: $(BUILD_DIR) match.h
-	@echo "Building optimized benchmark..."
-	$(CC) -O3 -DNDEBUG $(INCLUDES) -o $(BUILD_DIR)/benchmark.exe $(TESTS_DIR)/test_basic.c
-	@echo "Running benchmark..."
-	time ./$(BUILD_DIR)/benchmark.exe
+	@echo "Running comprehensive performance benchmarks..."
+	./benchmarks/run_benchmarks.sh
 
 # Assembly output for analysis
 asm: match.h

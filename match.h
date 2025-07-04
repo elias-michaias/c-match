@@ -38,8 +38,8 @@
  * 
  *   Result_int result = divide(10, 2);
  *   match(&result) {
- *       when(variant(Ok)) { printf("Result: %d\n", it(int)); }
- *       when(variant(Err)) { printf("Error: %s\n", it(char*)); }
+ *       when(variant(Ok)) { printf("Result: %d\n", result.value); }
+ *       when(variant(Err)) { printf("Error: %s\n", result.error); }
  *   }
  * 
  *   // Usage Examples:
@@ -71,13 +71,13 @@
  *   TaggedValue val = {TAG_INT, .int_val = 42};
  *   match(&val) {
  *       when(variant(TAG_INT)) {
- *           printf("Got integer: %d\n", it(int));
+ *           printf("Got integer: %d\n", val.int_val);
  *       }
  *       when(variant(TAG_FLOAT)) {
- *           printf("Got float: %f\n", it(float));
+ *           printf("Got float: %f\n", val.float_val);
  *       }
  *       when(variant(TAG_STRING)) {
- *           printf("Got string: %s\n", it(char*));
+ *           printf("Got string: %s\n", val.string_val);
  *       }
  *       otherwise {
  *           printf("Unknown variant\n");
@@ -138,11 +138,11 @@
  *   Result_Point result = create_point(10, 20);
  *   match(&result) {
  *       when(variant(Ok)) {
- *           Point p = it(Point);
+ *           Point p = result.value;
  *           printf("Point: (%d, %d)\n", p.x, p.y);
  *       }
  *       when(variant(Err)) {
- *           printf("Error: %s\n", it(char*));
+ *           printf("Error: %s\n", result.error);
  *       }
  *   }
  * 
@@ -184,7 +184,7 @@ typedef enum {
         uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
             TYPE value; \
-            char* error_msg; \
+            char* error; \
         }; \
     } Result_##TYPE; \
     \
@@ -193,7 +193,7 @@ typedef enum {
     } \
     \
     static inline Result_##TYPE err_##TYPE(const char* msg) { \
-        return (Result_##TYPE){Err, 0, .error_msg = (char*)msg}; \
+        return (Result_##TYPE){Err, 0, .error = (char*)msg}; \
     }
 
 // ============================================================================
@@ -206,7 +206,7 @@ typedef enum {
         uint32_t _padding; /* Ensure consistent 8-byte alignment */ \
         union { \
             TYPE* value; \
-            char* error_msg; \
+            char* error; \
         }; \
     } Result_##SUFFIX; \
     \
@@ -215,7 +215,7 @@ typedef enum {
     } \
     \
     static inline Result_##SUFFIX err_##SUFFIX(const char* msg) { \
-        return (Result_##SUFFIX){Err, 0, .error_msg = (char*)msg}; \
+        return (Result_##SUFFIX){Err, 0, .error = (char*)msg}; \
     }
 
 // ============================================================================
@@ -227,6 +227,7 @@ CreateResult(int)
 CreateResult(float)
 CreateResult(double)
 CreateResult(long)
+CreateResult(short)
 CreateResult(size_t)
 
 // Pointer types with clean names
@@ -250,7 +251,7 @@ CreateResultPtr(size_t, size_t_ptr)
     (is_ok(result_ptr) ? (result_ptr)->value : (default_val))
 
 #define unwrap_or_else(result_ptr, func) \
-    (is_ok(result_ptr) ? (result_ptr)->value : func((result_ptr)->error_msg))
+    (is_ok(result_ptr) ? (result_ptr)->value : func((result_ptr)->error))
 
 // ============================================================================
 // Error handling utilities
@@ -272,7 +273,7 @@ CreateResultPtr(size_t, size_t_ptr)
 
 #define RESULT_MAP(result_ptr, func, result_type) \
     (is_ok(result_ptr) ? ok_##result_type(func((result_ptr)->value)) : \
-                         err_##result_type((result_ptr)->error_msg))
+                         err_##result_type((result_ptr)->error))
 
 #define RESULT_AND_THEN(result_ptr, func) \
     (is_ok(result_ptr) ? func((result_ptr)->value) : *result_ptr)
@@ -340,6 +341,30 @@ CreateResultPtr(size_t, size_t_ptr)
 // Thread-local storage for extracted variant values
 static __thread void* __variant_extracted_value = ((void*)0);
 
+// Thread-local storage for type information
+static __thread void* __current_subject_ptr = ((void*)0);
+static __thread int __current_subject_type = 0;
+
+// Remove the complex type tracking for now - it's causing compilation issues
+// We'll implement a different approach that's more practical
+
+// Type identification constants
+#define TYPE_UNKNOWN 0
+#define TYPE_OPTION_INT 1
+#define TYPE_OPTION_DOUBLE 2
+#define TYPE_OPTION_FLOAT 3
+#define TYPE_OPTION_LONG 4
+#define TYPE_OPTION_CHAR_PTR 5
+#define TYPE_OPTION_VOID_PTR 6
+#define TYPE_OPTION_INT_PTR 7
+#define TYPE_RESULT_INT 10
+#define TYPE_RESULT_DOUBLE 11
+#define TYPE_RESULT_FLOAT 12
+#define TYPE_RESULT_LONG 13
+#define TYPE_RESULT_CHAR_PTR 14
+#define TYPE_RESULT_VOID_PTR 15
+#define TYPE_RESULT_INT_PTR 16
+
 static inline int evaluate_pattern(intptr_t actual, void* pattern) {
     if (IS_WILDCARD(pattern)) return 1;
     
@@ -392,16 +417,24 @@ static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void
     // First check if this could be a tagged union auto-variant case
     // Only applies to the first argument when it's a pointer to a struct
     if (subject != ((void*)0) && (uintptr_t)subject > 0x1000) {  // Basic pointer sanity check
+        
+        // For auto-conversion, if subject is a pointer to a pointer, use actual instead
+        void* actual_struct = subject;
+        if ((uintptr_t)actual > 0x1000) {
+            // actual is likely a pointer value, use it instead
+            actual_struct = (void*)actual;
+        }
+        
         // Check if pattern is a small integer (likely enum value) and not a special pattern
         uintptr_t pattern_val = (uintptr_t)pattern;
         if (pattern_val <= 0xFFFF && (pattern_val >> 60) == 0) {  // Not a special pattern
             // Check if subject looks like a tagged union
-            uint32_t potential_tag = *(uint32_t*)subject;
+            uint32_t potential_tag = *(uint32_t*)actual_struct;
             if (potential_tag > 0 && potential_tag <= 0xFFFF) {  // Reasonable tag range
                 if (potential_tag == (uint32_t)pattern_val) {
                     // Auto-convert to variant match!
                     void* variant_pattern = (void*)(0x8000000000000000ULL | (((uint64_t)potential_tag << 16) | 1));
-                    return evaluate_pattern((intptr_t)subject, variant_pattern);
+                    return evaluate_pattern((intptr_t)actual_struct, variant_pattern);
                 }
             }
         }
@@ -412,17 +445,23 @@ static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void
 }
 
 // ============================================================================
-// Union Destructuring Helper Macros
+// Union Value Access - Direct Field Access (Recommended)
 // ============================================================================
 
-// Access the extracted variant value (with type casting) - simplified interface
-#define it(type) (*((type*)__variant_extracted_value))
+// Use direct field access for clean, zero-overhead value extraction:
+//   Option types: my_option.value
+//   Result types: my_result.value (for Ok) or my_result.error (for Err)
+//
+// Examples:
+//   match(&my_option) {
+//       when(Some) { int x = my_option.value; }
+//   }
+//   
+//   match(&my_result) {
+//       when(Ok) { int x = my_result.value; }
+//       when(Err) { char* err = my_result.error; }
+//   }
 
-// Access the extracted variant value (with type casting) - legacy interface
-#define variant_value(type) (*((type*)__variant_extracted_value))
-
-// Check if a value was extracted (for debugging)
-#define has_variant_value() (__variant_extracted_value != ((void*)0))
 
 // ============================================================================
 // Automatic Pattern Conversion
@@ -679,10 +718,28 @@ static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void
 #define MATCH_EXPR_DISPATCH_(N, ...) MATCH_EXPR_##N(__VA_ARGS__)
 
 #define MATCH_EXPR_1(a1) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); __auto_type __result =
+    ({ __auto_type __v1_val = (a1); \
+       void *__v1_orig = (void*)&__v1_val; \
+       intptr_t __v1_int = _Generic(__v1_val, \
+        float: (intptr_t)(*(uint32_t*)&__v1_val), \
+        double: (intptr_t)(*(uint64_t*)&__v1_val), \
+        default: (intptr_t)(__v1_val)); \
+       void *__v1 = (void*)__v1_int; \
+       __auto_type __result =
 
 #define MATCH_EXPR_2(a1, a2) \
-    ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v2_orig = (void*)(a2); __auto_type __result =
+    ({ __auto_type __v1_val = (a1); __auto_type __v2_val = (a2); \
+       void *__v1_orig = (void*)&__v1_val; void *__v2_orig = (void*)&__v2_val; \
+       intptr_t __v1_int = _Generic(__v1_val, \
+        float: (intptr_t)(*(uint32_t*)&__v1_val), \
+        double: (intptr_t)(*(uint64_t*)&__v1_val), \
+        default: (intptr_t)(__v1_val)); \
+       intptr_t __v2_int = _Generic(__v2_val, \
+        float: (intptr_t)(*(uint32_t*)&__v2_val), \
+        double: (intptr_t)(*(uint64_t*)&__v2_val), \
+        default: (intptr_t)(__v2_val)); \
+       void *__v1 = (void*)__v1_int; void *__v2 = (void*)__v2_int; \
+       __auto_type __result =
 
 #define MATCH_EXPR_3(a1, a2, a3) \
     ({ void *__v1 = (void*)(intptr_t)(a1); void *__v1_orig = (void*)(a1); void *__v2 = (void*)(intptr_t)(a2); void *__v2_orig = (void*)(a2); void *__v3 = (void*)(intptr_t)(a3); void *__v3_orig = (void*)(a3); __auto_type __result =
@@ -839,7 +896,7 @@ static inline int evaluate_pattern_enhanced(void* subject, intptr_t actual, void
  *   Option_Point option = find_point(42);
  *   match(&option) {
  *       when(Some) {
- *           Point p = it(Point);
+ *           Point p = option.value;
  *           printf("Found point: (%d, %d)\n", p.x, p.y);
  *       }
  *       when(None) {
@@ -932,6 +989,7 @@ CreateOption(int)
 CreateOption(float)
 CreateOption(double)
 CreateOption(long)
+CreateOption(short)
 CreateOption(size_t)
 
 // Pointer types with clean names

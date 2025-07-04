@@ -41,7 +41,7 @@ int array[] = {1, 2, 3, 4, 5};
 Option_int result = find_value(array, 5, 3);
 match(&result) {
     when(Some) {
-        printf("Found: %d\n", it(int));
+        printf("Found: %d\n", of(&result));
     }
     when(None) {
         printf("Not found\n");
@@ -59,10 +59,10 @@ Result_int divide(int a, int b) {
 Result_int result = divide(10, 2);
 match(&result) {
     when(Ok) {
-        printf("Success: %d\n", it(int));
+        printf("Success: %d\n", of(&result));
     }
     when(Err) {
-        printf("Error: %s\n", it(char*));
+        printf("Error: %s\n", of(&result));
     }
 }
 
@@ -201,7 +201,7 @@ int main() {
     
     match(&result) {
         when(Some) {
-            printf("First positive number: %d\n", it(int));
+            printf("First positive number: %d\n", of(&result));
         }
         when(None) {
             printf("No positive numbers found\n");
@@ -234,10 +234,10 @@ int main() {
     
     match(&result) {
         when(Ok) {
-            printf("Result: %d\n", it(int));
+            printf("Result: %d\n", of(&result));
         }
         when(Err) {
-            printf("Error: %s\n", it(char*));
+            printf("Error: %s\n", of(result));
         }
     }
     

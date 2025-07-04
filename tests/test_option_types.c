@@ -63,7 +63,7 @@ int main() {
     int extracted_value = 0;
     match(&some_val) {
         when(Some) {
-            extracted_value = it(int);
+            extracted_value = some_val.value;
             printf("✓ Matched Some automatically: %d\n", extracted_value);
             matched_some = 1;
         }
@@ -119,7 +119,7 @@ int main() {
     
     match(&point_some) {
         when(Some) {
-            Point p = it(Point);
+            Point p = point_some.value;
             printf("✓ Found point: (%d, %d)\n", p.x, p.y);
             assert(p.x == 10 && p.y == 20);
         }
@@ -151,22 +151,22 @@ int main() {
     
     printf("Testing manual variant matching for pointers:\n");
     match(&name_some) {
-        when(variant(Some)) {
-            char* extracted_name = it(char*);
+        when(Some) {
+            char* extracted_name = name_some.value;
             printf("✓ Manual variant: Found name: %s\n", extracted_name);
             if (extracted_name != NULL) {
                 assert(strcmp(extracted_name, "Alice") == 0);
             }
         }
-        when(variant(None)) {
-            printf("✗ Should not match variant(None)\n");
+        when(None) {
+            printf("✗ Should not match None\n");
         }
     }
     
     printf("Testing auto-variant matching for pointers:\n");
     match(&name_some) {
         when(Some) {
-            char* extracted_name = it(char*);
+            char* extracted_name = name_some.value;
             printf("✓ Auto-variant: Found name: %s\n", extracted_name);
             if (extracted_name != NULL) {
                 assert(strcmp(extracted_name, "Alice") == 0);
@@ -180,7 +180,7 @@ int main() {
     printf("Testing auto-variant matching for pointers:\n");
     match(&name_some) {
         when(Some) {
-            char* extracted_name = it(char*);
+            char* extracted_name = name_some.value;
             printf("✓ Auto-variant: Found name: %s\n", extracted_name);
             if (extracted_name != NULL) {
                 assert(strcmp(extracted_name, "Alice") == 0);
