@@ -1064,7 +1064,7 @@ match(category) {
 }
 ```
 
-## Performance
+## Performance 
 
 Almost all simple cases are equivalent to or out-perform handwritten C code. Complex cases can sometimes be more costly. Run `make benchmark` to get a detailed performance comparison between the macro implementation and the handwritten implementation of the same functions.
 The `make benchmark` command will also output `.asm` files in the `build/` directory that you can inspect.
