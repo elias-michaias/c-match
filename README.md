@@ -1126,14 +1126,9 @@ result = let(value1, value2, ...) in(
 - `in(...)` - Expression form terminator
 - `otherwise` - Default case for statement form
 
-## Examples and Testing
+## Testing
 
-The `tests/` directory contains comprehensive examples and test cases:
-- `test_basic.c` - Core pattern matching features and tagged unions
-- `test_results.c` - Result type system demonstrations
-- Basic usage patterns
-- Performance comparisons
-- Real-world use cases
+The `tests/` directory contains comprehensive examples and test cases.
 
 Run the test suite:
 ```bash
@@ -1147,6 +1142,8 @@ Tests cover:
 - Result type system
 - Edge cases and error conditions
 - Performance characteristics
+- Union destructuring
+- Tagged union generation
 
 ## License
 
@@ -1164,12 +1161,6 @@ Contributions are welcome! Please:
 
 ### v1.0.0
 - Initial release
-- Support for up to 10 arguments
-- Statement and expression forms
-- All pattern types implemented
-- Zero-overhead design
-- Comprehensive test suite
-- Complete documentation
 
 ## Building
 
@@ -1186,9 +1177,8 @@ gcc -std=c11 -O2 your_code.c
 ```
 match/
 ├── match.h              # 🎯 SINGLE HEADER FILE - This is all you need!
-├── tests/
-│   ├── test_basic.c     # Pattern matching tests and examples
-│   └── test_results.c   # Result type system tests and examples
+├── tests/               # Tests
+├── benchmarks/          # Benchmarks
 ├── build/               # Build artifacts (ignored by git)
 ├── Makefile            # Build system
 ├── README.md           # This documentation
