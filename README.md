@@ -1,11 +1,11 @@
 # Pattern Matching System for C
 
-A zero-overhead pattern matching system for C that provides ergonomic syntax with compile-time optimization.
+A low-to-no overhead pattern matching system for C that provides ergonomic syntax with compile-time optimization. Comes out of the box with Result types, Option types, and more goodies associated with pattern matching.
 
 ## Features
 
 - **Type-agnostic matching** for up to 10 arguments
-- **Zero runtime overhead** - compiles to optimal assembly identical to hand-written C
+- **Low runtime overhead** - compiles to optimal assembly, nearly identical to hand-written C in most cases
 - **Rich pattern support**: literals, wildcards, inequalities, ranges, tagged unions
 - **Enum and tagged union destructuring** with automatic value extraction via `it(TYPE)`
 - **Option types** - Full `Option<T>` system with `CreateOption(TYPE)` macro, `some_TYPE()`, `none_TYPE()`, helper functions, and seamless pattern matching
@@ -537,7 +537,7 @@ Option_float to_percentage(Option_int* score, int max_score) {
 
 ## Result Types
 
-The library includes a comprehensive Result type system similar to Rust's `Result<T, E>`, providing ergonomic error handling with zero runtime overhead.
+The library includes a comprehensive Result type system similar to Rust's `Result<T, E>`, providing ergonomic error handling.
 
 ### Basic Result Usage
 
@@ -989,19 +989,8 @@ match(category) {
 
 ## Performance
 
-This pattern matching system is designed for **zero runtime overhead**:
-
-The existing (not incredibly-exhaustive) benchmarks show:
-- Pattern matching: 0.006662 seconds
-- Hand-written: 0.006764 seconds
-- **Overhead: 0.98x** (actually 2% faster!)
-
-The system compiles to identical optimized assembly as equivalent if-else chains.
-
-- All patterns are resolved at compile time
-- No function calls or dynamic dispatch
-- Compiles to identical assembly as hand-written if-else chains
-- Suitable for embedded systems and performance-critical code
+Almost all simple cases are equivalent to or out-perform handwritten C code. Complex cases can sometimes be more costly. Run `make benchmark` to get a detailed performance comparison between the macro implementation and the handwritten implementation of the same functions.
+The `make benchmark` command will also output `.asm` files in the `build/` directory that you can inspect.
 
 ```c
 // This pattern matching code...

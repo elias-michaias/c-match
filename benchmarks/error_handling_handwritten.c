@@ -1,41 +1,33 @@
 /*
  * Hand-written C implementation of error handling
  * This serves as the baseline for Result type comparison
+ * Uses the same Result types as the pattern matching system, but with manual operations
  */
 
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../match.h"
 
-// Manual error handling with return codes
-typedef struct {
-    int success;
-    double value;
-    const char* error;
-} DivisionResult;
+// Use the same Result types as the pattern matching system
+// but perform manual operations instead of pattern matching
 
-DivisionResult divide_handwritten(double a, double b) {
+Result_double divide_handwritten(double a, double b) {
     if (b == 0.0) {
-        return (DivisionResult){0, 0.0, "Division by zero"};
+        return err_double("Division by zero");
     }
-    return (DivisionResult){1, a / b, NULL};
+    return ok_double(a / b);
 }
 
-typedef struct {
-    int success;
-    int value;
-    const char* error;
-} ParseResult;
-
-ParseResult parse_int_handwritten(const char* str) {
+Result_int parse_int_handwritten(const char* str) {
     if (!str || strlen(str) == 0) {
-        return (ParseResult){0, 0, "Empty string"};
+        return err_int("Empty string");
     }
     if (strcmp(str, "42") == 0) {
-        return (ParseResult){1, 42, NULL};
+        return ok_int(42);
     }
-    return (ParseResult){0, 0, "Invalid number"};
+    return err_int("Invalid number");
 }
 
 int main() {
@@ -45,23 +37,27 @@ int main() {
     
     clock_t start = clock();
     
-    // Benchmark 1: Division with error handling
+    // Benchmark 1: Division with error handling using manual Result operations
     volatile double div_result = 0.0;
     for (int i = 0; i < ITERATIONS; i++) {
-        DivisionResult result = divide_handwritten(100.0, (double)(i % 10));
-        if (result.success) {
+        Result_double result = divide_handwritten(100.0, (double)(i % 10));
+        // Manual check instead of pattern matching
+        if (result.tag == Ok) {
             div_result += result.value;
         }
+        // Ignore errors manually instead of using when(Err)
     }
     
-    // Benchmark 2: Parsing with error handling
+    // Benchmark 2: Parsing with error handling using manual Result operations
     volatile int parse_result = 0;
     const char* test_strings[] = {"42", "", "invalid", "42"};
     for (int i = 0; i < ITERATIONS; i++) {
-        ParseResult result = parse_int_handwritten(test_strings[i % 4]);
-        if (result.success) {
+        Result_int result = parse_int_handwritten(test_strings[i % 4]);
+        // Manual check instead of pattern matching
+        if (result.tag == Ok) {
             parse_result += result.value;
         }
+        // Ignore errors manually instead of using when(Err)
     }
     
     clock_t end = clock();
