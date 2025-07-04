@@ -7,7 +7,7 @@ A low-to-no overhead pattern matching system for C that provides ergonomic synta
 - **Type-agnostic matching** for up to 10 arguments
 - **Low runtime overhead** - compiles to optimal assembly, nearly identical to hand-written C in most cases
 - **Rich pattern support**: literals, wildcards, inequalities, ranges, tagged unions
-- **Enum and tagged union destructuring** with automatic value extraction via `it(TYPE)`
+- **Direct field access** - Clean, zero-overhead value extraction with `.value` and `.error` fields
 - **Option types** - Full `Option<T>` system with `CreateOption(TYPE)` macro, `some_TYPE()`, `none_TYPE()`, helper functions, and seamless pattern matching
 - **Result types** - Full `Result<T, E>` system with `CreateResult(TYPE)` macro, `ok_TYPE()`, `err_TYPE()`, helper functions, and seamless pattern matching
 - **Two forms**: Statement form `match() { when() ... }` and expression form `let() in( is() ? ... : ... )`
@@ -41,7 +41,7 @@ int array[] = {1, 2, 3, 4, 5};
 Option_int result = find_value(array, 5, 3);
 match(&result) {
     when(Some) {
-        printf("Found: %d\n", of(&result));
+        printf("Found: %d\n", result.value);
     }
     when(None) {
         printf("Not found\n");
@@ -59,10 +59,10 @@ Result_int divide(int a, int b) {
 Result_int result = divide(10, 2);
 match(&result) {
     when(Ok) {
-        printf("Success: %d\n", of(&result));
+        printf("Success: %d\n", result.value);
     }
     when(Err) {
-        printf("Error: %s\n", of(&result));
+        printf("Error: %s\n", result.error);
     }
 }
 
@@ -201,7 +201,7 @@ int main() {
     
     match(&result) {
         when(Some) {
-            printf("First positive number: %d\n", of(&result));
+            printf("First positive number: %d\n", result.value);
         }
         when(None) {
             printf("No positive numbers found\n");
@@ -234,10 +234,10 @@ int main() {
     
     match(&result) {
         when(Ok) {
-            printf("Result: %d\n", of(&result));
+            printf("Result: %d\n", result.value);
         }
         when(Err) {
-            printf("Error: %s\n", of(result));
+            printf("Error: %s\n", result.error);
         }
     }
     
@@ -342,7 +342,7 @@ int main() {
     // Pattern matching with Options
     match(&result) {
         when(Some) {
-            printf("Found: %d\n", it(int));
+            printf("Found: %d\n", result.value);
         }
         when(None) {
             printf("Not found\n");
@@ -422,10 +422,10 @@ Option_int results[] = {
 
 for (int i = 0; i < 3; i++) {
     match(&results[i]) {
-        when(variant(Some)) {
-            printf("Found: %d\n", it(int));
+        when(Some) {
+            printf("Found: %d\n", results[i].value);
         }
-        when(variant(None)) {
+        when(None) {
             printf("Not found\n");
         }
     }
@@ -434,9 +434,9 @@ for (int i = 0; i < 3; i++) {
 // Expression form
 const char* classify_option(Option_int* option) {
     return let(option) in(
-        is(variant(Some)) ? (it(int) > 0 ? "positive" : 
-                          it(int) < 0 ? "negative" : "zero") :
-        is(variant(None)) ? "none" :
+        is(Some) ? (option->value > 0 ? "positive" : 
+                    option->value < 0 ? "negative" : "zero") :
+        is(None) ? "none" :
         "unknown"
     );
 }
@@ -465,12 +465,12 @@ void handle_file_operation(const char* filename) {
     Option_char_ptr file_result = read_file(filename);
     
     match(&file_result) {
-        when(variant(Some)) {
-            char* content = it(char*);
+        when(Some) {
+            char* content = file_result.value;
             printf("File content: %s\n", content);
             free(content);
         }
-        when(variant(None)) {
+        when(None) {
             printf("File not found: %s\n", filename);
         }
     }
@@ -526,10 +526,10 @@ Option_int calculate_score(int base, int multiplier, int bonus) {
 // Option transformation
 Option_float to_percentage(Option_int* score, int max_score) {
     return let(score) in(
-        is(variant(Some)) ? (it(int) > max_score ? 
-                          none_float() :
-                          some_float((float)it(int) / max_score * 100.0f)) :
-        is(variant(None)) ? none_float() :
+        is(Some) ? (score->value > max_score ? 
+                    none_float() :
+                    some_float((float)score->value / max_score * 100.0f)) :
+        is(None) ? none_float() :
         none_float()
     );
 }
@@ -557,11 +557,11 @@ int main() {
     
     // Pattern matching with Results
     match(&result) {
-        when(variant(Ok)) {
-            printf("Success: %d\n", it(int));
+        when(Ok) {
+            printf("Success: %d\n", result.value);
         }
-        when(variant(Err)) {
-            printf("Error: %s\n", it(char*));
+        when(Err) {
+            printf("Error: %s\n", result.error);
         }
     }
     
@@ -643,12 +643,12 @@ Result_int results[] = {
 
 for (int i = 0; i < 3; i++) {
     match(&results[i]) {
-        when(variant(Ok)) {
-            int value = it(int);
+        when(Ok) {
+            int value = results[i].value;
             printf("Success: %d\n", value);
         }
-        when(variant(Err)) {
-            char* error = it(char*);
+        when(Err) {
+            char* error = results[i].error;
             printf("Error: %s\n", error);
         }
     }
@@ -657,9 +657,9 @@ for (int i = 0; i < 3; i++) {
 // Expression form
 const char* classify_result(Result_int* result) {
     return let(result) in(
-        is(variant(Ok)) ? (it(int) > 0 ? "positive" : 
-                          it(int) < 0 ? "negative" : "zero") :
-        is(variant(Err)) ? "error" :
+        is(Ok) ? (result->value > 0 ? "positive" : 
+                  result->value < 0 ? "negative" : "zero") :
+        is(Err) ? "error" :
         "unknown"
     );
 }
@@ -688,13 +688,13 @@ void handle_file_operation(const char* filename) {
     Result_char_ptr file_result = read_file(filename);
     
     match(&file_result) {
-        when(variant(Ok)) {
-            char* content = it(char*);
+        when(Ok) {
+            char* content = file_result.value;
             printf("File content: %s\n", content);
             free(content);
         }
-        when(variant(Err)) {
-            char* error = it(char*);
+        when(Err) {
+            char* error = file_result.error;
             match(strstr(error, "permission")) {
                 when(ne(NULL)) {
                     printf("Permission denied for %s\n", filename);
@@ -757,10 +757,10 @@ Result_int calculate_score(int base, int multiplier, int bonus) {
 // Result transformation
 Result_float to_percentage(Result_int* score, int max_score) {
     return let(score) in(
-        is(variant(Ok)) ? (it(int) > max_score ? 
-                          err_float("Score exceeds maximum") :
-                          ok_float((float)it(int) / max_score * 100.0f)) :
-        is(variant(Err)) ? err_float(it(char*)) :
+        is(Ok) ? (score->value > max_score ? 
+                  err_float("Score exceeds maximum") :
+                  ok_float((float)score->value / max_score * 100.0f)) :
+        is(Err) ? err_float(score->error) :
         err_float("Invalid result")
     );
 }
@@ -826,21 +826,21 @@ typedef struct {
     };
 } TaggedValue;
 
-// Use variant() to match tags and it() to access values
+// Use variant() to match tags and direct field access to get values
 TaggedValue value = {TAG_INT, .int_val = 42};
 
 match(&value) {
     when(variant(TAG_INT)) {
-        printf("Integer: %d\n", it(int));
+        printf("Integer: %d\n", value.int_val);
     }
     when(variant(TAG_FLOAT)) {
-        printf("Float: %.2f\n", it(float));
+        printf("Float: %.2f\n", value.float_val);
     }
     when(variant(TAG_STRING)) {
-        printf("String: %s\n", it(char*));
+        printf("String: %s\n", value.string_val);
     }
     when(variant(TAG_BOOL)) {
-        printf("Boolean: %s\n", it(int) ? "true" : "false");
+        printf("Boolean: %s\n", value.bool_val ? "true" : "false");
     }
     otherwise {
         printf("Unknown variant\n");
@@ -1041,8 +1041,8 @@ result = let(value1, value2, ...) in(
 - `variant(tag)` - Tagged union pattern (match by tag)
 
 ### Value Access Macros
-- `it(type)` - Access matched tagged union value
-- `variant_value(type)` - Legacy interface for tagged union values
+- **Direct field access** - Use `.value` for Option/Result values and `.error` for Result errors
+- **Tagged union fields** - Access union fields directly (e.g., `value.int_val`, `value.string_val`)
 
 ### Utility Macros
 - `do(...)` - Multi-statement expression block
