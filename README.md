@@ -116,7 +116,6 @@ int complex = let(value) in(
 
 ### Step 1: Include the Header
 ```c
-#include <stdio.h>
 #include "match.h"  // Single header - that's all you need!
 ```
 
