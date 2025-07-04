@@ -236,7 +236,7 @@ int main() {
 }
 ```
 
-### Step 7: Result Types for Error Handling
+### Step 6: Result Types for Error Handling
 ```c
 // Function that can fail
 Result_int safe_divide(int a, int b) {
@@ -267,7 +267,7 @@ int main() {
 }
 ```
 
-### Step 8: Compilation
+### Step 7: Compilation
 ```bash
 # Basic compilation
 gcc -std=c11 -Wall -O2 your_program.c -o your_program
