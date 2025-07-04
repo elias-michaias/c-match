@@ -331,7 +331,7 @@ make asm
 | `ne(x)` | Not equal | `when(ne(10))` | value != 10 |
 | `range(low, high)` | Exclusive range | `when(range(10, 20))` | 10 < value < 20 |
 | `between(low, high)` | Inclusive range | `when(between(10, 20))` | 10 <= value <= 20 |
-| `variant(tag)` | Tagged union match | `when(variant(TAG_INT))` | Union tag match |
+| `Variant` | Tagged union or enum match | `when(Variant)` | Union tag match |
 
 ## Option Types
 
